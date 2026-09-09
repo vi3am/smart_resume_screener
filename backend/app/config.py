@@ -1,10 +1,12 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    app_name : str = "Smart Resume Screener"
-    debug: bool = False
-    secret_key: str
-    database_url: str
+    APP_NAME : str = "Smart Resume Screener"
+    DEBUG: bool = False
+    JWT_SECRET_KEY: str
+    DATABASE_URL: str
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
     class Config:
         env_file = ".env"

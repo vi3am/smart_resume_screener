@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.schemas import EchoRequest, EchoResponse
 from app.routers import practice, auth
 
-app = FastAPI(title=settings.app_name)
+app = FastAPI(title=settings.APP_NAME)
 
 origins = [
 	"http://localhost:5173",
@@ -22,8 +21,8 @@ app.include_router(auth.router)
 
 @app.get("/")
 def read_root():
-	return {
-        "message": f"{settings.app_name} API is alive", 
-        "debug_mode": settings.debug
+    return {
+        "message": f"{settings.APP_NAME} API is alive",
+        "debug_mode": settings.DEBUG,
     }
 
