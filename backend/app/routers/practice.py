@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.schemas import EchoResponse, EchoRequest
+from app.schemas.schemas import EchoResponse, EchoRequest
 
 router = APIRouter(prefix="/practice", tags=["practice"])
 
