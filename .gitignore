@@ -35,3 +35,4 @@ pgdata/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+backend/uploads/
