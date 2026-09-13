@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import Resume, JobPosting, User
 from app.schemas.resume import ResumeOut
+from app.services.file_utils import build_stored_filename
 from app.services.parser import extract_text, parse_resume
 from app.core.deps import get_current_user
 
@@ -31,11 +32,13 @@ def upload_resume(
     if not job:
         raise HTTPException(404, "Job not found")
 
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(400, f"Unsupported file type: {ext}")
+    try:
+        generated = build_stored_filename(None, file.filename)
+    except ValueError:
+        raise HTTPException(400, "Unsupported file type")
 
-    save_path = os.path.join(UPLOAD_DIR, f"{job_id}_{file.filename}")
+    stored_filename = generated["stored_filename"]
+    save_path = os.path.join(UPLOAD_DIR, stored_filename)
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
@@ -44,7 +47,7 @@ def upload_resume(
 
     resume = Resume(
         job_id=job_id,
-        filename=file.filename,
+        filename=stored_filename,
         raw_text=raw_text,
         parsed_data=json.dumps(parsed)
         )
