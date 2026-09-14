@@ -55,7 +55,34 @@ JOB_TITLE_TOKENS = {
     "designer", "architect", "scientist", "researcher", "teacher",
     "trainer", "executive", "sales", "marketing", "human", "resources",
 }
+def is_title_or_upper_case(candidate: str) -> bool:
+    """Real names are Title Case ('John Smith') or ALL CAPS ('JOHN SMITH') —
+    never fully lowercase like a stray sentence fragment."""
+    words = candidate.split()
+    if not words:
+        return False
+    return all(w[0].isupper() for w in words if w[0].isalpha())
 
+INSTITUTION_TOKENS = {
+    "university", "college", "institute", "academy", "school",
+    "polytechnic", "faculty",
+}
+
+def looks_like_institution(candidate: str) -> bool:
+    cleaned = re.sub(r"[^a-z0-9\s]+", " ", candidate.lower())
+    tokens = set(re.findall(r"[a-z0-9]+", cleaned))
+    return bool(tokens.intersection(INSTITUTION_TOKENS))
+
+
+SOCIAL_HANDLE_PATTERN = re.compile(r"^@\w+")
+
+# Broader set of tech/tool/framework terms that keep getting mistaken for names.
+# This is a living list — expect to keep adding to it as new resumes surface new terms.
+TECH_TERMS = {
+    "jetpack compose", "kotlin", "flutter", "firebase", "langchain",
+    "pinecone", "scikit-learn", "matplotlib", "fastapi", "django",
+    "laravel", ".net", "c#", "tensorflow", "pytorch",
+}
 
 def looks_like_job_title(candidate: str) -> bool:
     
@@ -91,6 +118,12 @@ def extract_text(file_path: str) -> str:
 def looks_like_placeholder_name(candidate: str) -> bool:
     if not candidate:
         return True
+    
+    cleaned = re.sub(r"[^a-z0-9\s]+", " ", candidate.lower())
+    tokens = set(re.findall(r"[a-z0-9]+", cleaned))
+
+    if tokens & RESUME_SECTION_LABELS:
+        return False
 
     cleaned = re.sub(r"[^a-z0-9\s]+", " ", candidate.lower())
     if PLACEHOLDER_NAME_PATTERN.search(cleaned):
@@ -114,7 +147,16 @@ def looks_like_real_name(candidate: str) -> bool:
     if looks_like_job_title(candidate):
         return False
 
+    if looks_like_institution(candidate):     # NEW — catches "Wardiere University"
+        return False
+    
     if URL_DOMAIN_PATTERN.search(candidate):
+        return False
+
+    if SOCIAL_HANDLE_PATTERN.match(candidate.strip()):          # NEW — catches "@reallygreatsite"
+        return False
+
+    if not is_title_or_upper_case(candidate):                    # NEW — catches lowercase sentence fragments
         return False
 
     if len(candidate.split()) > 5:
@@ -123,6 +165,9 @@ def looks_like_real_name(candidate: str) -> bool:
     if candidate.lower() in COMMON_SKILLS:
         return False
 
+    if candidate.lower() in TECH_TERMS:                          # NEW — catches "Jetpack Compose"
+        return False
+    
     if re.search(EMAIL_PATTERN, candidate):
         return False
 
@@ -135,16 +180,12 @@ def looks_like_real_name(candidate: str) -> bool:
     if "\n" in candidate:
         return False
 
-    # Reject sentence-shaped or template fragments such as:
-    # "laboris +123-456-7890" or similar mixed contact-artifact output.
     if re.search(r"[\+\-\d]{7,}", candidate):
         return False
 
     cleaned = re.sub(r"[^a-z0-9\s]+", " ", candidate.lower())
     tokens = set(re.findall(r"[a-z0-9]+", cleaned))
 
-    # Reject pure resume-section header fragments such as:
-    # "SUMMARY EXPERIENCE" or "SKILLS EDUCATION".
     if tokens and tokens.issubset(RESUME_SECTION_LABELS):
         return False
 
@@ -154,30 +195,23 @@ def looks_like_real_name(candidate: str) -> bool:
 def parse_resume(text: str) -> dict:
     emails = re.findall(EMAIL_PATTERN, text)
     phones = re.findall(PHONE_PATTERN, text)
-
     text_lower = text.lower()
     found_skills = [skill for skill in COMMON_SKILLS if skill in text_lower]
 
-    header_text = text[:300]
-    header_doc = nlp(header_text)
+    doc = nlp(text)  # scan the FULL document, no character cutoff
+    candidates = [
+        (ent.start_char, ent.text.strip())
+        for ent in doc.ents
+        if ent.label_ == "PERSON" and looks_like_real_name(ent.text.strip())
+    ]
+    candidates.sort(key=lambda c: c[0])  
 
-    candidate_names = []
-    for ent in header_doc.ents:
-        if ent.label_ != "PERSON":
-            continue
-        candidate = ent.text.strip()
-        if looks_like_real_name(candidate):
-            candidate_names.append(candidate)
-
-    name = candidate_names[0] if candidate_names else None
+    name = candidates[0][1] if candidates else None
 
     if not name:
-        # Prefer the first real top-of-file non-empty line that looks like a person name.
         for line in text.splitlines():
             clean_line = line.strip()
-            if not clean_line:
-                continue
-            if looks_like_real_name(clean_line):
+            if clean_line and looks_like_real_name(clean_line):
                 name = clean_line
                 break
 

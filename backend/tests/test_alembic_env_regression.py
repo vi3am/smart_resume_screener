@@ -86,6 +86,33 @@ def test_parse_resume_rejects_detail_section_label_as_candidate_name():
     assert parsed["phone"] == "+123-456-7890"
 
 
+def test_parse_resume_rejects_layout_markers_in_name_candidates():
+    text = (
+        "SONG CHANBUNLINA +\n"
+        "Customer Service & Content Creation Assistant\n"
+        "Phnom Penh, Cambodia | 0933313777 | bunchanlinasong@gmail.com\n"
+        "PROFESSIONAL PROFILE\n"
+        "Motivated Economics student at the Royal University of"
+    )
+
+    parsed = parse_resume(text)
+
+    assert parsed["name"] is None
+
+
+def test_parse_resume_rejects_punctuation_only_candidates():
+    text = (
+        "::\n"
+        "hello@reallygreatsite.com\n"
+        "+123-456-7890\n"
+        "git teamwork time management communication leadership"
+    )
+
+    parsed = parse_resume(text)
+
+    assert parsed["name"] is None
+
+
 def test_parse_resume_rejects_placeholder_text_as_candidate_name():
     text = (
         "dolore magna aliqua\n"
