@@ -1,6 +1,7 @@
 import os
 import shutil
 import json
+import uuid
 from fastapi import APIRouter, UploadFile, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -13,13 +14,14 @@ from app.models.models import MatchScore
 from app.schemas.match import RankedCandidate
 from app.services.matcher import score_resume
 
-
+MAX_FILE_SIZE = 5 * 1024 * 1024  
 router = APIRouter(prefix="/jobs/{job_id}/resumes", tags=["resumes"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+
 
 @router.post("/", response_model=ResumeOut)
 def upload_resume(
@@ -28,20 +30,40 @@ def upload_resume(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Confirm the job exists AND belongs to this recruiter
     job = db.query(JobPosting).filter(
         JobPosting.id == job_id, JobPosting.recruiter_id == current_user.id
     ).first()
     if not job:
         raise HTTPException(404, "Job not found")
 
-    try:
-        generated = build_stored_filename(None, file.filename)
-    except ValueError:
-        raise HTTPException(400, "Unsupported file type")
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported file type: {ext}")
 
-    stored_filename = generated["stored_filename"]
-    save_path = os.path.join(UPLOAD_DIR, stored_filename)
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported file type: {ext}")
+
+    file.file.seek(0, 2)          # seek to end of file
+    size = file.file.tell()
+    file.file.seek(0)             # reset pointer back to start — CRITICAL, or the file reads as empty later
+    if size > MAX_FILE_SIZE:
+        raise HTTPException(400, "File too large (max 5MB)")    
+    
+    
+
+    # Duplicate check (keep your existing logic here if already added)
+    existing = db.query(Resume).filter(
+        Resume.job_id == job_id, Resume.filename == file.filename
+    ).first()
+    if existing:
+        raise HTTPException(400, f"A resume named '{file.filename}' was already uploaded for this job")
+
+    # SECURITY: never use the user-supplied filename in the actual file path.
+    # Generate a random, safe filename for disk storage; keep the original
+    # only as a display value in the database.
+    safe_filename = f"{job_id}_{uuid.uuid4().hex}{ext}"
+    save_path = os.path.join(UPLOAD_DIR, safe_filename)
+
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
@@ -50,10 +72,10 @@ def upload_resume(
 
     resume = Resume(
         job_id=job_id,
-        filename=stored_filename,
+        filename=file.filename,      # original name, safe to store as text
         raw_text=raw_text,
-        parsed_data=json.dumps(parsed)
-        )
+        parsed_data=json.dumps(parsed),
+    )
     db.add(resume)
     db.commit()
     db.refresh(resume)
@@ -105,6 +127,8 @@ def reparse_resume(
 @router.get("/rankings", response_model=list[RankedCandidate])
 def rank_resumes(
     job_id: int,
+    limit: int = 20,
+    offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -138,4 +162,25 @@ def rank_resumes(
 
     db.commit()
     results.sort(key=lambda r: r.overall_score, reverse=True)
-    return results
+
+    # Apply pagination AFTER sorting, so page boundaries respect rank order
+    return results[offset : offset + limit]
+
+@router.delete("/{job_id}")
+def delete_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    job = db.query(JobPosting).filter(
+        JobPosting.id == job_id, JobPosting.recruiter_id == current_user.id
+    ).first()
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    resume_count = db.query(Resume).filter(Resume.job_id == job_id).count()
+    if resume_count > 0:
+        raise HTTPException(
+            400,
+            f"Cannot delete job with {resume_count} resume(s) attached. Delete the resumes first."
+        )
+
+    db.delete(job)
+    db.commit()
+    return {"deleted": True}
