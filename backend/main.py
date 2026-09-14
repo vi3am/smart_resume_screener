@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from app.config import settings
 from app.routers import practice, auth, jobs, resumes
+from app.database import get_db
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -28,3 +31,10 @@ def read_root():
         "debug_mode": settings.DEBUG,
     }
 
+@app.get("/health")
+def health_check(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception:
+        return {"status": "degraded", "database": "disconnected"}
