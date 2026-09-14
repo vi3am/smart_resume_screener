@@ -9,6 +9,9 @@ from app.schemas.resume import ResumeOut
 from app.services.file_utils import build_stored_filename
 from app.services.parser import extract_text, parse_resume
 from app.core.deps import get_current_user
+from app.models.models import MatchScore
+from app.schemas.match import RankedCandidate
+from app.services.matcher import score_resume
 
 
 router = APIRouter(prefix="/jobs/{job_id}/resumes", tags=["resumes"])
@@ -97,3 +100,42 @@ def reparse_resume(
     response = ResumeOut.model_validate(resume)
     response.parsed_data = parsed 
     return response
+
+
+@router.get("/rankings", response_model=list[RankedCandidate])
+def rank_resumes(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.query(JobPosting).filter(
+        JobPosting.id == job_id, JobPosting.recruiter_id == current_user.id
+    ).first()
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    resumes = db.query(Resume).filter(Resume.job_id == job_id).all()
+
+    results = []
+    for resume in resumes:
+        score_value = score_resume(job.description, resume.raw_text or "")
+
+        existing = db.query(MatchScore).filter(MatchScore.resume_id == resume.id).first()
+        if existing:
+            existing.overall_score = score_value
+        else:
+            db.add(MatchScore(resume_id=resume.id, overall_score=score_value))
+
+        parsed = json.loads(resume.parsed_data) if resume.parsed_data else {}
+        results.append(RankedCandidate(
+            resume_id=resume.id,
+            filename=resume.filename,
+            candidate_name=parsed.get("name"),
+            overall_score=score_value,
+            skills_score=None,
+            experience_score=None,
+        ))
+
+    db.commit()
+    results.sort(key=lambda r: r.overall_score, reverse=True)
+    return results
