@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import JobPosting, User
+from app.models.models import JobPosting, User, Resume
 from app.schemas.job import JobCreate, JobOut
 from app.core.deps import get_current_user
+
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -39,9 +40,19 @@ def update_job(job_id: int, updates: JobCreate, db: Session = Depends(get_db), c
 
 @router.delete("/{job_id}")
 def delete_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    job = db.query(JobPosting).filter(JobPosting.id == job_id, JobPosting.recruiter_id == current_user.id).first()
+    job = db.query(JobPosting).filter(
+        JobPosting.id == job_id, JobPosting.recruiter_id == current_user.id
+    ).first()
     if not job:
         raise HTTPException(404, "Job not found")
+
+    resume_count = db.query(Resume).filter(Resume.job_id == job_id).count()
+    if resume_count > 0:
+        raise HTTPException(
+            400,
+            f"Cannot delete job with {resume_count} resume(s) attached. Delete the resumes first."
+        )
+
     db.delete(job)
     db.commit()
     return {"deleted": True}

@@ -40,10 +40,7 @@ def upload_resume(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Unsupported file type: {ext}")
 
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(400, f"Unsupported file type: {ext}")
-
-    file.file.seek(0, 2)          # seek to end of file
+    file.file.seek(0, 2)         
     size = file.file.tell()
     file.file.seek(0)             # reset pointer back to start — CRITICAL, or the file reads as empty later
     if size > MAX_FILE_SIZE:
@@ -166,21 +163,3 @@ def rank_resumes(
     # Apply pagination AFTER sorting, so page boundaries respect rank order
     return results[offset : offset + limit]
 
-@router.delete("/{job_id}")
-def delete_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    job = db.query(JobPosting).filter(
-        JobPosting.id == job_id, JobPosting.recruiter_id == current_user.id
-    ).first()
-    if not job:
-        raise HTTPException(404, "Job not found")
-
-    resume_count = db.query(Resume).filter(Resume.job_id == job_id).count()
-    if resume_count > 0:
-        raise HTTPException(
-            400,
-            f"Cannot delete job with {resume_count} resume(s) attached. Delete the resumes first."
-        )
-
-    db.delete(job)
-    db.commit()
-    return {"deleted": True}
