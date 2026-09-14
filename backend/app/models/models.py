@@ -19,13 +19,13 @@ class User(Base):
 
 class JobPosting(Base):
     __tablename__ = "job_postings"
-
     id = Column(Integer, primary_key=True, index=True)
     recruiter_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     required_skills = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())   
 
     recruiter = relationship("User", back_populates="job_postings")
     resumes = relationship("Resume", back_populates="job")

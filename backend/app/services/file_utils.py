@@ -7,6 +7,7 @@ MAX_SLUG_LEN = 60
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
 
+
 def slugify(value: str) -> str:
     """Normalize any string into a safe, filesystem-friendly slug."""
     if not value:
