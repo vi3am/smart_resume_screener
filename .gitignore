@@ -1,12 +1,34 @@
+# Security / secrets
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.sqlite3
+*.db
+*.secret
+*.token
+secrets/
+secrets.*
+
 # Python / backend
+backend/.venv/
 backend/venv/
-backend/.env
-backend/.env.*
+venv/
 backend/__pycache__/
 backend/**/*.py[cod]
 backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.ruff_cache/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
 
 # Alembic local db state if ever created
 backend/alembic/versions/*.bak
@@ -18,6 +40,7 @@ frontend/dist-ssr/
 frontend/.vite/
 frontend/.env
 frontend/.env.*
+**/node_modules/
 
 # OS / editor
 .DS_Store
@@ -29,10 +52,12 @@ frontend/.env.*
 # Docker / local data
 pgdata/
 *.local
+backend/uploads/
+backend/media/
+backend/generated/
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
-backend/uploads/
