@@ -167,11 +167,18 @@ def looks_like_institution(candidate: str) -> bool:
 
 def is_title_or_upper_case(candidate: str) -> bool:
     """Real names are Title Case ('John Smith') or ALL CAPS ('JOHN SMITH') —
-    never fully lowercase, which usually signals a stray sentence fragment."""
-    words = candidate.split()
+    never fully lowercase, and never just punctuation/layout markers."""
+    if not candidate or not re.search(r"[A-Za-z]", candidate):
+        return False
+
+    if re.search(r"[^A-Za-z\s'’-]", candidate):
+        return False
+
+    words = re.findall(r"[A-Za-z]+(?:['’-][A-Za-z]+)?", candidate)
     if not words:
         return False
-    return all(w[0].isupper() for w in words if w[0].isalpha())
+
+    return all(w[:1].isupper() or w.isupper() for w in words)
 
 
 def contains_section_label(candidate: str) -> bool:
