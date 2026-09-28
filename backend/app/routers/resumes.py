@@ -72,6 +72,7 @@ def upload_resume(
         filename=file.filename,      # original name, safe to store as text
         raw_text=raw_text,
         parsed_data=json.dumps(parsed),
+        status="done"
     )
     db.add(resume)
     db.commit()

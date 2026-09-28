@@ -124,3 +124,28 @@ def test_parse_resume_rejects_placeholder_text_as_candidate_name():
     parsed = parse_resume(text)
 
     assert parsed["name"] is None
+
+
+def test_parse_resume_finds_name_after_resume_metadata_and_section_labels():
+    samples = [
+        (
+            "SUMMARY\nPROFILE\nHELENA WONG\n+65 9123 4567 | helena@gmail.com\nSkills\nCommunication, teamwork, leadership",
+            "HELENA WONG",
+        ),
+        (
+            "Address: 123 Main St\nPhone: 555-121-2121\nEmail: hello@reallygreatsite.com\nJANE DOE\nSoftware Engineer",
+            "JANE DOE",
+        ),
+        (
+            "University of Technology\nBachelor of Computer Science\nALEXANDER LEE\nalexander.lee@example.com",
+            "ALEXANDER LEE",
+        ),
+        (
+            "www.linkedin.com/in/alexlee\nALEX LEE\nSoftware Developer\nalexlee@work.com",
+            "ALEX LEE",
+        ),
+    ]
+
+    for text, expected_name in samples:
+        parsed = parse_resume(text)
+        assert parsed["name"] == expected_name

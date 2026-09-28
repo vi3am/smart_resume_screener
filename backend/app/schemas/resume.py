@@ -15,6 +15,8 @@ class ResumeOut(BaseModel):
     job_id: int
     filename: str
     parsed_data: str | None = None
+    status: str
+    failure_reason: str | None = None
     uploaded_at: datetime
 
     class Config:
