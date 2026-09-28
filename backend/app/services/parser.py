@@ -106,6 +106,27 @@ JOB_TITLE_PHRASES = ("executive", "manager", "specialist", "analyst", "consultan
 # Text extraction
 # ---------------------------------------------------------------------------
 
+def extract_skills_section(text: str) -> list[str]:
+    """Fallback: if no keyword skills matched, grab bullet-like lines
+    following a 'Skills' heading, regardless of what words they contain."""
+    lines = text.splitlines()
+    skills_lines = []
+    capturing = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if capturing:
+                break  # blank line ends the section
+            continue
+        if stripped.lower() in ("skills", "key skills", "core skills"):
+            capturing = True
+            continue
+        if capturing:
+            if stripped.lower() in RESUME_SECTION_LABELS:
+                break  # hit the next section
+            skills_lines.append(stripped)
+    return skills_lines[:10]  # cap it, avoid grabbing runaway content
+
 def extract_text(file_path: str) -> str:
     if file_path.endswith(".pdf"):
         with pdfplumber.open(file_path) as pdf:
@@ -269,21 +290,24 @@ def parse_resume(text: str) -> dict:
 
     text_lower = text.lower()
     found_skills = [skill for skill in COMMON_SKILLS if skill in text_lower]
+    if not found_skills:
+        found_skills = extract_skills_section(text)
+    # found_skills = [skill for skill in COMMON_SKILLS if skill in text_lower]
 
-    # Priority 1: resume convention — the name is almost always the first
-    # non-empty line. This sidesteps spaCy's known weakness on all-caps
-    # names entirely, and is more reliable than NER for well-ordered templates.
+    # Priority 1: resume convention — the name is often in the first few
+    # header lines, not necessarily the very first non-empty line. This
+    # sidesteps spaCy's known weakness on all-caps names while still handling
+    # templates with metadata, labels, and contact blocks before the actual name.
     name = None
-    for line in text.splitlines():
+    for line in text.splitlines()[:12]:
         clean_line = line.strip()
         if not clean_line:
             continue
         if looks_like_real_name(clean_line):
             name = clean_line
-        break  # only ever look at the very first non-empty line here
+            break
 
-    # Priority 2: NER on the header window — for templates where the first
-    # line is NOT the name (e.g. sidebar/contact info extracted before the
+    
     # header due to column-ordering quirks).
     if not name:
         name = _find_name_in_window(_header_window(text))
