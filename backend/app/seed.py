@@ -52,6 +52,8 @@ def seed(db: Session) -> None:
     print("Upload resumes to this job through /docs to continue the vertical slice.")
 
 
+
+
 if __name__ == "__main__":
     db = SessionLocal()
     try:
