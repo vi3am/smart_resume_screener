@@ -1,20 +1,20 @@
 # Smart Resume Screener
 
-An AI-powered job matching app that lets recruiters create job posts, upload resumes, and get ranked candidate matches based on resume-to-job similarity.
+A FastAPI + React app for creating job postings, uploading resumes, and ranking candidates against a job description.
 
-## Technologies
+## Tech stack
 
 - Frontend: React + Vite
 - Backend: FastAPI + SQLAlchemy
-- Database: PostgreSQL
+- Database: PostgreSQL 16
 - Auth: JWT
 - Resume parsing: pdfplumber, python-docx, spaCy
 - Matching: sentence-transformers
-- Containerization: Docker Compose
+- Local infrastructure: Docker Compose
 
 ## Prerequisites
 
-Make sure these are installed:
+Install these before starting:
 
 - Python 3.11+
 - Node.js 18+
@@ -22,7 +22,7 @@ Make sure these are installed:
 - Docker Desktop or Docker Engine
 - Git
 
-Check versions:
+Verify versions:
 
 ```bash
 python3 --version
@@ -32,72 +32,67 @@ docker --version
 git --version
 ```
 
-## 1) Clone the project
+## 1) Clone the repository
 
 ```bash
-git clone https://github.com/vi3am/smart_resume_screener.git
-cd smart_resume_screener
+git clone <your-repo-url>
+cd smart-resume-screener
 ```
 
 ## 2) Configure backend environment
 
-Create a file named `.env` inside `backend/`:
+Create a backend `.env` file:
 
 ```bash
 cd backend
 cat > .env <<'EOF'
 APP_NAME=Smart Resume Screener
 DEBUG=True
-JWT_SECRET_KEY=change-me-to-a-long-random-string
-DATABASE_URL=postgresql://admin:random_passowrd@localhost:5432/resume_screener
+JWT_SECRET_KEY=change-this-to-a-long-random-string
+DATABASE_URL=postgresql://admin:random_password@localhost:5433/resume_screener
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 POSTGRES_USER=admin
-POSTGRES_PASSWORD=random_passowrd
+POSTGRES_PASSWORD=random_password
 POSTGRES_DB=resume_screener
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 EOF
 ```
 
-Important:
-- The app reads environment variables from `backend/.env`.
-- Docker Compose also uses that file through `docker-compose.yml`.
-- If you change the Postgres password, recreate the database volume.
+Notes:
 
-## 3) Start PostgreSQL with Docker
+- The backend loads environment variables from `backend/.env`.
+- Docker Compose reads the same file and exposes PostgreSQL on port `5433`.
+- If you change the password, reset the database volume before reconnecting.
+
+## 3) Start PostgreSQL
 
 From the project root:
 
 ```bash
+cd ..
 docker compose up -d db
 ```
 
-Check the container:
+Check that the container is running:
 
 ```bash
 docker ps
 ```
 
-You should see a Postgres container running on port `5432`.
+You should see a PostgreSQL container named `resume_screener_db`.
 
-## 4) Install Python dependencies
-
-Create and activate a virtual environment:
+## 4) Install backend dependencies
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Install packages:
-
-```bash
 pip install -r requirements.txt
 ```
 
-If spaCy models are not already installed, download the English model:
+If the spaCy English model is not already installed, run:
 
 ```bash
 python -m spacy download en_core_web_sm
@@ -108,10 +103,11 @@ python -m spacy download en_core_web_sm
 From the backend directory:
 
 ```bash
+source .venv/bin/activate
 alembic upgrade head
 ```
 
-## 6) Run the backend
+## 6) Start the backend
 
 From the backend directory:
 
@@ -120,44 +116,51 @@ source .venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API docs:
+The API will be available at:
+
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-Optional health check:
-
-```bash
-curl http://localhost:8000/docs
-```
-
-## 7) Install and run the frontend
+## 7) Start the frontend
 
 Open a second terminal and run:
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
 
 Then open:
 
 - http://localhost:5173
 
-The frontend expects the API at `http://localhost:8000`.
+The frontend expects the backend at `http://localhost:8000`.
 
-## 8) Run the backend tests
+## 8) Run tests
+
+Backend tests:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m pytest tests -q
+```
+
+## 9) Seed demo data
 
 From the backend directory:
 
 ```bash
 source .venv/bin/activate
-python -m pytest tests -q
+python -m app.seed
 ```
 
-## 9) Useful commands
+This resets the local seed data and prints a seeded recruiter and job ID.
 
-### Start database only
+## Useful commands
+
+### Start just the database
 
 ```bash
 docker compose up -d db
@@ -168,37 +171,39 @@ docker compose up -d db
 ```bash
 cd backend
 source .venv/bin/activate
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Start frontend only
 
 ```bash
 cd frontend
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
 
-### Reset database
+### Reset the DB completely
 
 ```bash
 docker compose down -v
 docker compose up -d db
 cd backend
+source .venv/bin/activate
 alembic upgrade head
 ```
 
-## Common issues
+## Troubleshooting
 
 ### `password authentication failed for user "admin"`
 
-You changed the Postgres password in `backend/.env` but the database volume was already created.
+This usually means your old PostgreSQL volume is still present with an older password.
 
-Reset the database:
+Run:
 
 ```bash
 docker compose down -v
 docker compose up -d db
 cd backend
+source .venv/bin/activate
 alembic upgrade head
 ```
 
@@ -214,34 +219,25 @@ python -m pytest tests -q
 
 ### `ModuleNotFoundError` for spaCy model
 
-Install the model:
-
 ```bash
 cd backend
 source .venv/bin/activate
 python -m spacy download en_core_web_sm
 ```
 
-## Project structure
+### Connection refused / database not reachable
+
+Check that Docker is running and the DB is healthy:
+
+```bash
+docker ps
+docker logs resume_screener_db
+```
+
+Then confirm your `DATABASE_URL` matches the container port:
 
 ```text
-smart-resume-screener/
-├── backend/
-│   ├── .env
-│   ├── .venv/
-│   ├── alembic/
-│   ├── app/
-│   ├── main.py
-│   ├── requirements.txt
-│   ├── tests/
-│   └── uploads/
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-├── docker-compose.yml
-├── README.md
-└── smart-resume-screener.code-workspace
+postgresql://admin:random_password@localhost:5433/resume_screener
 ```
 
 ## Quick start summary
@@ -257,10 +253,15 @@ alembic upgrade head
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Then in another terminal:
+In another terminal:
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
+
+Then open:
+
+- Frontend: http://localhost:5173
+- Backend docs: http://localhost:8000/docs
