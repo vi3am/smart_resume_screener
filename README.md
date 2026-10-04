@@ -24,8 +24,8 @@ Install these before starting:
 
 Verify versions:
 
-```bash
-python3 --version
+```powershell
+python --version
 node --version
 npm --version
 docker --version
@@ -34,18 +34,18 @@ git --version
 
 ## 1) Clone the repository
 
-```bash
+```powershell
 git clone <your-repo-url>
 cd smart-resume-screener
 ```
 
-## 2) Configure backend environment
+## 2) Create the backend environment file
 
-Create a backend `.env` file:
+Create a file named `.env` inside `backend`:
 
-```bash
+```powershell
 cd backend
-cat > .env <<'EOF'
+@'
 APP_NAME=Smart Resume Screener
 DEBUG=True
 JWT_SECRET_KEY=change-this-to-a-long-random-string
@@ -57,75 +57,83 @@ POSTGRES_PASSWORD=random_password
 POSTGRES_DB=resume_screener
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-EOF
+'@ | Set-Content .env
 ```
 
 Notes:
 
-- The backend loads environment variables from `backend/.env`.
-- Docker Compose reads the same file and exposes PostgreSQL on port `5433`.
-- If you change the password, reset the database volume before reconnecting.
+- The backend reads `backend/.env` automatically.
+- Docker Compose also reads the same file and exposes PostgreSQL on port `5433`.
+- If you change the Postgres password, reset the Docker database volume before reconnecting.
 
-## 3) Start PostgreSQL
+## 3) Start PostgreSQL with Docker
 
 From the project root:
 
-```bash
+```powershell
 cd ..
 docker compose up -d db
 ```
 
-Check that the container is running:
+Check the container:
 
-```bash
+```powershell
 docker ps
 ```
 
-You should see a PostgreSQL container named `resume_screener_db`.
+You should see a container named `resume_screener_db`.
 
-## 4) Install backend dependencies
+## 4) Create and activate a Python virtual environment
 
-```bash
+From the backend folder:
+
+```powershell
 cd backend
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks activation, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+## 5) Install backend dependencies
+
+```powershell
 pip install -r requirements.txt
 ```
 
-If the spaCy English model is not already installed, run:
+If the spaCy English model is not installed:
 
-```bash
+```powershell
 python -m spacy download en_core_web_sm
 ```
 
-## 5) Run database migrations
+## 6) Run database migrations
 
-From the backend directory:
-
-```bash
-source .venv/bin/activate
+```powershell
 alembic upgrade head
 ```
 
-## 6) Start the backend
+## 7) Start the backend
 
-From the backend directory:
-
-```bash
-source .venv/bin/activate
+```powershell
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at:
+Open the API docs at:
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- http://localhost:8000/docs
+- http://localhost:8000/redoc
 
-## 7) Start the frontend
+## 8) Start the frontend
 
 Open a second terminal and run:
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev -- --host 0.0.0.0
@@ -137,57 +145,54 @@ Then open:
 
 The frontend expects the backend at `http://localhost:8000`.
 
-## 8) Run tests
+## 9) Run tests
 
-Backend tests:
-
-```bash
+```powershell
 cd backend
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 python -m pytest tests -q
 ```
 
-## 9) Seed demo data
+## 10) Seed demo data
 
-From the backend directory:
-
-```bash
-source .venv/bin/activate
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
 python -m app.seed
 ```
 
-This resets the local seed data and prints a seeded recruiter and job ID.
+This resets the local demo data and prints the seeded recruiter and job IDs.
 
 ## Useful commands
 
-### Start just the database
+### Start only the database
 
-```bash
+```powershell
 docker compose up -d db
 ```
 
 ### Start backend only
 
-```bash
+```powershell
 cd backend
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Start frontend only
 
-```bash
+```powershell
 cd frontend
 npm run dev -- --host 0.0.0.0
 ```
 
-### Reset the DB completely
+### Reset the database
 
-```bash
+```powershell
 docker compose down -v
 docker compose up -d db
 cd backend
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 alembic upgrade head
 ```
 
@@ -195,46 +200,46 @@ alembic upgrade head
 
 ### `password authentication failed for user "admin"`
 
-This usually means your old PostgreSQL volume is still present with an older password.
+This usually means the old PostgreSQL volume still contains an older password.
 
 Run:
 
-```bash
+```powershell
 docker compose down -v
 docker compose up -d db
 cd backend
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 alembic upgrade head
 ```
 
 ### `No module named pytest`
 
-Use the project virtual environment:
+Use the venv in the backend folder:
 
-```bash
+```powershell
 cd backend
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 python -m pytest tests -q
 ```
 
 ### `ModuleNotFoundError` for spaCy model
 
-```bash
+```powershell
 cd backend
-source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 python -m spacy download en_core_web_sm
 ```
 
 ### Connection refused / database not reachable
 
-Check that Docker is running and the DB is healthy:
+Check the database container:
 
-```bash
+```powershell
 docker ps
 docker logs resume_screener_db
 ```
 
-Then confirm your `DATABASE_URL` matches the container port:
+Then confirm the database URL is:
 
 ```text
 postgresql://admin:random_password@localhost:5433/resume_screener
@@ -242,12 +247,12 @@ postgresql://admin:random_password@localhost:5433/resume_screener
 
 ## Quick start summary
 
-```bash
+```powershell
 cd smart-resume-screener
 docker compose up -d db
 cd backend
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -255,7 +260,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 In another terminal:
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev -- --host 0.0.0.0
@@ -265,3 +270,7 @@ Then open:
 
 - Frontend: http://localhost:5173
 - Backend docs: http://localhost:8000/docs
+
+## Notes
+
+This project was written to work cleanly in a Windows PowerShell environment, but the same app also runs in macOS/Linux terminals using the equivalent Unix commands.
