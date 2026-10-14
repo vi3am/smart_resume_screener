@@ -1,20 +1,22 @@
-import { useEffect, useState } from "react";
+// src/App.jsx
+import { Routes, Route } from "react-router-dom";
+import LoginPage from "./pages/LoginPage";
+import SlicePage from "./pages/SlicePage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
-
-  const [message, setMessage] = useState("Loading...");
-
-  useEffect(() => {
-    fetch("http://127.0.0.1:8000")
-    .then((res) => res.json())
-    .then((data) => setMessage(data.message))
-    .catch((err) => setMessage("Error: " + err.message))
-  },[])
-
-  return(
-    <div className="min-h-screen flex items-center justify-center">
-      <h1 className="text-2xl font-bold text-blue-500">{message}</h1>
-    </div>
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <SlicePage />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 

@@ -25,14 +25,14 @@ app.include_router(jobs.router)
 app.include_router(resumes.router)
 
 
-@app.get("/")
-def read_root():
-    return {
-        "message": f"{settings.APP_NAME} API is alive",
-        "debug_mode": settings.DEBUG,
-    }
+# @app.get("/")
+# def read_root():
+#     return {
+#         "message": f"{settings.APP_NAME} API is alive",
+#         "debug_mode": settings.DEBUG,
+#     }
 
-@app.get("/health")
+@app.get("/")
 def health_check(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
