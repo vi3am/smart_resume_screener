@@ -1,0 +1,76 @@
+[NAME]
+IT Engineer Intern
+[EMAIL] | [PHONE] | Toul Pongro, Phnom Penh | [URL]
+PROFESSIONAL SUMMARY
+Motivated and passionate software development student with a background in programming, database management, and
+application development. Familiar with Python, Java, SQL, Android development, and backend technologies such as FastAPI.
+Strong willingness to learn new technologies, solve problems, and develop practical software solutions. Seeking an
+internship opportunity to gain real-world experience, strengthen technical skills, and contribute effectively to a professional
+development team.
+CORE SKILLS
+Mobile: Kotlin, Jetpack Compose, XML, MVVM, Flutter, Dart, Room Database, Material Design 3, Firebase (Auth, Firestore,
+Storage)
+AI & LLM: Pandas, Pinecone, Scikit-learn Linear Regression, Classification, Decision Tree, RAG systems, LangChain
+Web & Backend: Python FastAPI, Django, PHP, Laravel, C#, ASP.NET Framework, React Js, HTML5, CSS, JavaScript, Tailwind
+CSS, Bootstrap
+Database: MySQL, PostgreSQL, Microsoft SQL Server, Room Database, Firebase Firestore
+Languages & Fundamentals: Java, C, C++, Object-Oriented Programming (OOP), Clean Architecture
+Tools & Other: REST APIs, Git/GitHub, Cloud solutions, Cisco IT Essentials, Microsoft Office
+Soft Skills: Problem Solving, Fast Learner, Team Collaboration, Communication, Time Management, Critical Thinking,
+Adaptability
+WORK EXPERIENCE
+Associate Internship Service — Digital Divide Data July 2025 – Nov 2025
+• Performed layout analysis and zoning on magazine content to define structure and reading order.
+• Extracted metadata and separated text, image, and ad elements to support accurate digital structuring.
+• Maintained data integrity and quality standards across high-volume content processing.
+Digital Marketing Internship — Wedushare Nov 2024 – Jan 2025
+• Collaborated with the media team to plan and produce targeted video content for campaigns.
+• Edited dynamic video content and worked alongside content writers on messaging.
+• Captured photography and videography at live events to support brand content.
+Barista — Cafe Amazon PTT Jan 2022 – Jun 2022
+• Delivered fast, friendly customer service during high-volume peak hours.
+• Processed POS transactions accurately while maintaining an organized workspace.
+ACADEMIC PROJECTS
+ComposeCraft — Android Portfolio App
+Kotlin · Jetpack Compose · MVVM · Firebase · Material Design 3 | [URL]
+• Built a modern Android app using Jetpack Compose with clean MVVM architecture.
+• Integrated Firebase Authentication, Firestore, and Storage for a full auth + data flow.
+• Implemented state management, form validation, and reusable UI components.
+• Designed Material Design 3 UI including bottom navigation, carousels, dialogs, and lazy lists.
+Android Movie Mini App
+Kotlin · XML · MVVM · Clean Architecture · Moshi · TMDB API · Room Database
+• Developed a movie discovery app consuming the TMDB REST API for popular, top-rated, and upcoming titles.
+• Implemented MVVM with a clean, maintainable project structure.
+• Used Room Database to cache movie data for offline access.
+AI Facebook Page Assistant
+Python, FastAPI, LangChain, Gemini, Pinecone, Google Sheets, Meta Messenger API
+github.com /vi3am/Facebook-Assistant_ChatBot
+• Built an AI chatbot for Facebook Messenger to answer restaurant FAQs and handle table reservations.
+• Implemented RAG with Pinecone and Gemini for restaurant-specific responses.
+• Integrated Meta Messenger API and Google Sheets for automated customer interactions and reservations.
+Client-Server Chat Application
+C# · TCP/IP Sockets · Multithreading | [URL]
+• Built a real-time chat system with client and server apps using TCP sockets and multithreading.
+• Implemented message broadcasting and graceful disconnection handling for multiple concurrent clients.
+TRAINING & CERTIFICATIONS
+Career Acceleration Program (CAP) — Digital Divide Data Jun 2025 – Aug 2025
+• Completed a professional development program covering soft skills, computer skills, and English.
+IT Essentials — Cisco
+• Training in computer hardware, networking fundamentals, operating systems, and basic troubleshooting.
+• Studied basic cybersecurity, hardware/software troubleshooting, and IT best practices.
+• Developed foundational technical skills for IT support and computer operations.
+Full-Stack Flutter & Laravel Course — SalaIT Oct 2024 – Mar 2025
+• Built cross-platform apps with Flutter (Dart) and Laravel (PHP), covering UI design, RESTful APIs, authentication, and
+MySQL database management.
+Core Programming & OOP — ETEC Center 2021 – 2022
+• Developed a foundation in C/C++ (data types, control structures, arrays, functions, file handling) and Java (console-based
+and GUI apps).
+• Practiced OOP concepts: classes, objects, inheritance, polymorphism, encapsulation, abstraction.
+EDUCATION
+Associate Degree, Software Development — IT STEP Cambodia 2024 – Present
+Baccalaureate Degree — Cheasimsamaki High School 2017 – 2023
+LANGUAGES
+Khmer: Native
+English: Intermediate (B1)
+REFERENCE
+References available upon request.
