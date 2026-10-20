@@ -24,6 +24,8 @@ class Dataset:
     labels: dict[tuple[str, str], str]
     split: dict
     duplicate_labels: list[tuple[str, str]] = field(default_factory=list)
+    draft_labels: set[tuple[str, str]] = field(default_factory=set)
+    ai_reviewed_labels: set[tuple[str, str]] = field(default_factory=set)
 
     def relevant(self, posting_id: str) -> set[str]:
         return {cv for (pid, cv), y in self.labels.items() if pid == posting_id and y == "1"}
@@ -39,15 +41,30 @@ def load(data_dir: Path = DATA_DIR) -> Dataset:
 
     labels: dict[tuple[str, str], str] = {}
     duplicates: list[tuple[str, str]] = []
+    draft_labels: set[tuple[str, str]] = set()
+    ai_reviewed_labels: set[tuple[str, str]] = set()
     with open(data_dir / "labels.csv", newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             key = (row["posting_id"].strip(), row["cv_id"].strip())
             if key in labels:
                 duplicates.append(key)
             labels[key] = row["label"].strip()
+            notes = row.get("notes", "").strip()
+            if notes.startswith("[AI-DRAFT]"):
+                draft_labels.add(key)
+            elif notes.startswith("[AI-REVIEWED]"):
+                ai_reviewed_labels.add(key)
 
     split = json.loads((data_dir / "split.json").read_text(encoding="utf-8"))
-    return Dataset(postings, cvs, labels, split, duplicates)
+    return Dataset(
+        postings,
+        cvs,
+        labels,
+        split,
+        duplicates,
+        draft_labels,
+        ai_reviewed_labels,
+    )
 
 
 def validate(ds: Dataset) -> tuple[list[str], list[str]]:
@@ -95,6 +112,18 @@ def validate(ds: Dataset) -> tuple[list[str], list[str]]:
     for (pid, cid), value in ds.labels.items():
         if value not in {"0", "1"}:
             errors.append(f"label for ({pid}, {cid}) must be 0 or 1, got {value!r}")
+
+    draft_count = len(ds.draft_labels)
+    if draft_count:
+        errors.append(
+            f"{draft_count} label(s) are AI drafts and require student review "
+            "(run: python -m eval.label --review)"
+        )
+    if ds.ai_reviewed_labels:
+        warnings.append(
+            f"{len(ds.ai_reviewed_labels)} label(s) were reviewed by AI, not a student; "
+            "ranking metrics are exploratory and are not human-verified ground truth"
+        )
 
     for pid in ds.postings:
         labelled = {cv for (p, cv), y in ds.labels.items() if p == pid and y in {"0", "1"}}

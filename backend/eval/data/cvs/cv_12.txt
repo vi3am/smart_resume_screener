@@ -18,7 +18,7 @@ University Name adipiscing elit, sed do eiusmod tempor
 incididunt ut labore et dolore magna aliqua.
 Reference Your Degree Ut enim ad minim veniam,
 2015 Lorem ipsum dolor sit amet, consectetur
-Lorna Alvarado University Name adipiscing elit, sed do eiusmod tempor
+[NAME] University Name adipiscing elit, sed do eiusmod tempor
 incididunt ut labore et dolore magna aliqua.
 Company Name/Position
 Your Degree

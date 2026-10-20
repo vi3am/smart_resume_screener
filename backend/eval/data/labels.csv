@@ -1,1 +1,61 @@
 posting_id,cv_id,label,notes
+p1,cv_01,1,
+p1,cv_02,0,
+p1,cv_03,0,
+p1,cv_04,0,
+p1,cv_05,0,
+p1,cv_06,1,
+p1,cv_07,1,
+p1,cv_08,0,
+p1,cv_09,0,
+p1,cv_10,0,
+p1,cv_11,0,
+p1,cv_12,0,
+p1,cv_13,0,
+p1,cv_14,0,
+p1,cv_15,1,
+p1,cv_16,1,
+p1,cv_17,1,
+p1,cv_18,0,
+p1,cv_19,0,
+p1,cv_20,0,
+p2,cv_01,0,
+p2,cv_02,1,
+p2,cv_03,1,"[AI-REVIEWED] Graphic-design roles with design software, digital illustration, and UI/UX; duties are placeholder text, so borderline."
+p2,cv_04,0,
+p2,cv_05,0,"[AI-REVIEWED] Web-development work mentions website design, but not the required graphic, branding, and production skills."
+p2,cv_06,0,"[AI-REVIEWED] Marketing campaign materials mentioned, but no graphic-design or visual-production skills evidenced."
+p2,cv_07,0,"[AI-REVIEWED] Marketing management, without hands-on graphic-design evidence."
+p2,cv_08,0,"[AI-REVIEWED] Web design, typography, and UI/UX are adjacent; branding and required graphic-design tools are not evidenced."
+p2,cv_09,0,[AI-REVIEWED] Web development experience does not establish the required graphic-design skills.
+p2,cv_10,0,[AI-REVIEWED] Sales experience does not match graphic design.
+p2,cv_11,1,"[AI-REVIEWED] Art director with branding/rebranding, graphic and web design, print production, and creative strategy."
+p2,cv_12,0,"[AI-REVIEWED] Graphic-design title, but placeholder work history and sparse skills do not establish half the requirements."
+p2,cv_13,0,[AI-REVIEWED] Administrative operations experience does not match graphic design.
+p2,cv_14,1,"[AI-REVIEWED] Graphic designer with branding, digital and print campaigns, social design, and typography/layout."
+p2,cv_15,0,"[AI-REVIEWED] Marketing planning and social content, but no graphic-design portfolio skills or production evidence."
+p2,cv_16,0,[AI-REVIEWED] Teaching and event-support experience; no graphic-design work shown.
+p2,cv_17,0,[AI-REVIEWED] Content strategy lead collaborates with designers but does not show hands-on graphic-design work.
+p2,cv_18,0,[AI-REVIEWED] Placeholder work history and skills do not establish graphic-design qualifications.
+p2,cv_19,0,"[AI-REVIEWED] Software projects include app UI design, but branding, print/layout, and graphic-design tools are not evidenced."
+p2,cv_20,0,"[AI-REVIEWED] Photography/video content work, but no graphic-design, branding, or layout qualifications shown."
+p3,cv_01,0,"[AI-REVIEWED] Marketing management does not show office administration, scheduling, or records duties."
+p3,cv_02,0,[AI-REVIEWED] Visual-design experience does not match office administration.
+p3,cv_03,0,"[AI-REVIEWED] Sales/customer management, without office scheduling, records, or correspondence duties."
+p3,cv_04,0,[AI-REVIEWED] Web development experience does not match office administration.
+p3,cv_05,0,[AI-REVIEWED] Web development experience does not match office administration.
+p3,cv_06,0,[AI-REVIEWED] Marketing strategy experience does not match office administration.
+p3,cv_07,0,[AI-REVIEWED] Marketing management does not show the required office operations duties.
+p3,cv_08,0,[AI-REVIEWED] Web design experience does not match office administration.
+p3,cv_09,0,[AI-REVIEWED] Web development experience does not match office administration.
+p3,cv_10,0,[AI-REVIEWED] Sales experience does not show the required office operations duties.
+p3,cv_11,0,[AI-REVIEWED] Art-direction team/project management is not office administration experience.
+p3,cv_12,0,[AI-REVIEWED] Placeholder graphic-design experience does not establish office administration skills.
+p3,cv_13,1,"[AI-REVIEWED] Direct administrative assistant/coordinator roles include calendars, meetings, travel, records, correspondence, and reports."
+p3,cv_14,0,[AI-REVIEWED] Graphic-design experience does not match office administration.
+p3,cv_15,0,[AI-REVIEWED] Marketing management does not show the required office operations duties.
+p3,cv_16,1,"[AI-REVIEWED] Admin support and event logistics include document preparation, tracking lists/payments, and coordination; office scheduling is less clear."
+p3,cv_17,0,[AI-REVIEWED] Content marketing experience does not match office administration.
+p3,cv_18,0,[AI-REVIEWED] Placeholder work history and skills do not establish office administration experience.
+p3,cv_19,0,[AI-REVIEWED] Technical internship and software projects do not match office administration.
+p3,cv_20,0,[AI-REVIEWED] Content creation/customer service experience does not show office administration duties.

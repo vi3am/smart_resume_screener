@@ -40,7 +40,7 @@ Reference
 Ut enim ad minim veniam,
 2015
 Lorem ipsum dolor sit amet, consectetur
-Lorna Alvarado
+[NAME]
 University Name adipiscing elit, sed do eiusmod tempor
 Company Name/Position
 incididunt ut labore et dolore magna aliqua.

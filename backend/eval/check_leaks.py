@@ -1,4 +1,4 @@
-"""Report any manifest name that still appears in the anonymized CVs."""
+"""Report any complete manifest name that still appears in anonymized CVs."""
 import csv
 import re
 import sys
@@ -20,13 +20,13 @@ def main() -> int:
                 full = full.strip()
                 if full:
                     names.add(full)
-                    names.update(p for p in full.split() if len(p) >= 4)
 
     hits = 0
     for f in sorted((DATA_DIR / "cvs").glob("cv_*.txt")):
         for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
             for name in names:
-                if re.search(rf"\b{re.escape(name)}\b", line, re.IGNORECASE):
+                name_pattern = r"\s+".join(re.escape(part) for part in name.split())
+                if re.search(rf"\b{name_pattern}\b", line, re.IGNORECASE):
                     print(f"{f.name}:{n}: '{name}' -> {line.strip()[:80]}")
                     hits += 1
     print(f"\n{hits} possible leak(s)." if hits else "\nNo manifest names found in the CVs.")

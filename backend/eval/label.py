@@ -3,12 +3,14 @@
 Usage (from backend/):  python -m eval.label [p1 p2 p3]
 At the prompt:  1 = relevant, 0 = not relevant, s = skip, u = undo, q = quit.
 Add a note after the label, e.g.:  1 borderline, 1 year of internship only
+Use --review to confirm or change existing labels, including AI-drafted labels.
 """
 import csv
 import json
 import random
 import sys
 import shutil
+import argparse
 
 from eval.dataset import DATA_DIR
 
@@ -35,7 +37,7 @@ def read_labels() -> dict[tuple[str, str], dict]:
 
 def write_labels(rows: dict[tuple[str, str], dict]) -> None:
     with open(LABELS, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=FIELDS)
+        writer = csv.DictWriter(fh, fieldnames=FIELDS, lineterminator="\n")
         writer.writeheader()
         for key in sorted(rows):
             writer.writerow({f: rows[key].get(f, "") for f in FIELDS})
@@ -54,6 +56,15 @@ def show(posting: dict, cv_id: str, text: str, position: str) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Label or review CV/posting pairs.")
+    parser.add_argument("postings", nargs="*", help="posting IDs to label (default: all)")
+    parser.add_argument(
+        "--review",
+        action="store_true",
+        help="review existing labels; s keeps the current label",
+    )
+    args = parser.parse_args()
+
     postings = {
         p["id"]: p
         for p in json.loads((DATA_DIR / "postings.json").read_text(encoding="utf-8"))
@@ -62,7 +73,7 @@ def main() -> int:
         f.stem: f.read_text(encoding="utf-8")
         for f in sorted((DATA_DIR / "cvs").glob("cv_*.txt"))
     }
-    wanted = sys.argv[1:] or list(postings)
+    wanted = args.postings or list(postings)
     unknown = [p for p in wanted if p not in postings]
     if unknown:
         print(f"Unknown posting id(s): {unknown}. Known: {list(postings)}")
@@ -76,29 +87,48 @@ def main() -> int:
     for pid in wanted:
         order = sorted(cvs)
         random.Random(f"{SEED}-{pid}").shuffle(order)  # random, so order hints nothing
-        todo = [c for c in order if (pid, c) not in rows]
-        history: list[str] = []
+        if args.review:
+            todo = [c for c in order if (pid, c) in rows]
+        else:
+            todo = [c for c in order if (pid, c) not in rows]
+        history: list[tuple[str, dict | None]] = []
 
         while todo:
             cv_id = todo[0]
             done_here = len(order) - len(todo) + 1
-            show(postings[pid], cv_id, cvs[cv_id], f"{done_here}/{len(order)} for {pid}")
-            raw = input(f"[{len(rows)}/{total} labelled]  1/0/s/u/q > ").strip()
+            position = f"{done_here}/{len(order)} for {pid}"
+            if args.review:
+                current = rows[(pid, cv_id)]
+                print(
+                    f"Current label: {current['label']}; "
+                    f"note: {current.get('notes', '')}"
+                )
+                position = f"review {done_here}/{len(todo)} for {pid}"
+            show(postings[pid], cv_id, cvs[cv_id], position)
+            prompt = "1/0/s/u/q > " if not args.review else "1/0 replace, s keep, u undo, q quit > "
+            raw = input(f"[{len(rows)}/{total} labelled]  {prompt}").strip()
             cmd, _, note = raw.partition(" ")
             cmd = cmd.lower()
 
             if cmd in {"1", "0"}:
+                previous = rows.get((pid, cv_id))
                 rows[(pid, cv_id)] = {"posting_id": pid, "cv_id": cv_id,
                                     "label": cmd, "notes": note.strip()}
                 write_labels(rows)
-                history.append(cv_id)
+                history.append((cv_id, previous))
                 todo.pop(0)
             elif cmd == "s":
-                todo.append(todo.pop(0))
+                if args.review:
+                    todo.pop(0)
+                else:
+                    todo.append(todo.pop(0))
             elif cmd == "u":
                 if history:
-                    last = history.pop()
-                    rows.pop((pid, last), None)
+                    last, previous = history.pop()
+                    if previous is None:
+                        rows.pop((pid, last), None)
+                    else:
+                        rows[(pid, last)] = previous
                     write_labels(rows)
                     todo.insert(0, last)
                 else:
@@ -109,9 +139,10 @@ def main() -> int:
             else:
                 print("Type 1, 0, s, u or q.")
 
-        print(f"\nPosting {pid} finished.")
+        print(f"\nPosting {pid} {'reviewed' if args.review else 'finished'}.")
 
-    print(f"All requested postings done. {len(rows)}/{total} labelled.")
+    action = "reviewed" if args.review else "labelled"
+    print(f"All requested postings {action}. {len(rows)}/{total} labelled.")
     return 0
 
 
