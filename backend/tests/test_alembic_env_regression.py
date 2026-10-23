@@ -10,9 +10,21 @@ def test_alembic_env_defines_context_config_before_setting_url():
     content = env_path.read_text()
 
     config_assignment_index = content.index("config = context.config")
-    config_set_index = content.index('config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)')
+    config_set_index = content.index(
+        'config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))'
+    )
 
     assert config_assignment_index < config_set_index
+
+
+def test_alembic_config_round_trips_percent_encoded_database_url():
+    from alembic.config import Config
+
+    database_url = "postgresql://user:p%40ss%25word@localhost/resume_screener_test"
+    config = Config()
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+
+    assert config.get_main_option("sqlalchemy.url") == database_url
 
 
 def test_parse_resume_rejects_title_as_candidate_name():
