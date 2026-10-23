@@ -1,13 +1,13 @@
 import subprocess
 import sys
-import tempfile
 import uuid
+from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
 
 from app.database import SessionLocal
-from app.models.models import JobPosting, User
+from app.models.models import JobPosting, Resume, User
 from main import app
 
 
@@ -33,8 +33,11 @@ def register_login(email: str, password: str = "Pass123!", full_name: str = "Tes
     return headers
 
 
-def test_auth_and_job_resume_flow():
+def test_auth_and_job_resume_flow(monkeypatch, tmp_path):
     email = f"smoke_{uuid.uuid4().hex[:8]}@example.com"
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    monkeypatch.setattr("app.routers.resumes.UPLOAD_DIR", str(upload_dir))
 
     register_response = client.post(
         "/auth/register",
@@ -71,16 +74,18 @@ def test_auth_and_job_resume_flow():
     assert empty_job_response.status_code == 200, empty_job_response.text
     empty_job_id = empty_job_response.json()["id"]
 
-    with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
-        doc = Document()
-        doc.add_paragraph("John Smith")
-        doc.add_paragraph("john.smith@example.com")
-        doc.add_paragraph("+1 555 123 4567")
-        doc.add_paragraph("Skills: python, fastapi, sql, docker")
-        doc.save(tmp.name)
-        resume_path = tmp.name
+    resume_path = tmp_path / "john_smith.docx"
+    make_docx(
+        str(resume_path),
+        [
+            "John Smith",
+            "john.smith@example.com",
+            "+1 555 123 4567",
+            "Skills: python, fastapi, sql, docker",
+        ],
+    )
 
-    with open(resume_path, "rb") as resume_file:
+    with resume_path.open("rb") as resume_file:
         upload_response = client.post(
             f"/jobs/{job_id}/resumes/",
             files={"file": ("john_smith.docx", resume_file, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
@@ -88,6 +93,7 @@ def test_auth_and_job_resume_flow():
         )
     assert upload_response.status_code == 200, upload_response.text
     resume_id = upload_response.json()["id"]
+    assert isinstance(upload_response.json()["parsed_data"], dict)
 
     list_resumes_response = client.get(f"/jobs/{job_id}/resumes/", headers=headers)
     assert list_resumes_response.status_code == 200, list_resumes_response.text
@@ -95,6 +101,7 @@ def test_auth_and_job_resume_flow():
 
     reparse_response = client.post(f"/jobs/{job_id}/resumes/{resume_id}/reparse", headers=headers)
     assert reparse_response.status_code == 200, reparse_response.text
+    assert isinstance(reparse_response.json()["parsed_data"], dict)
 
     rankings_response = client.get(f"/jobs/{job_id}/resumes/rankings", headers=headers)
     assert rankings_response.status_code == 200, rankings_response.text
@@ -227,9 +234,22 @@ def test_job_posting_structured_fields_and_isolation():
     assert other_edit.status_code == 404
 
 
-def test_resume_upload_status_and_ranking_contracts():
+def test_resume_upload_status_and_ranking_contracts(monkeypatch, tmp_path):
     recruiter_email = f"resume_{uuid.uuid4().hex[:8]}@example.com"
     headers = register_login(recruiter_email)
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    monkeypatch.setattr("app.routers.resumes.UPLOAD_DIR", str(upload_dir))
+    score_inputs = []
+
+    def semantic_score(job_description, resume_text):
+        score_inputs.append((job_description, resume_text))
+        return 90.0 if "python" in resume_text.lower() else 10.0
+
+    monkeypatch.setattr(
+        "app.routers.resumes.score_resume",
+        semantic_score,
+    )
 
     job_response = client.post(
         "/jobs/",
@@ -245,10 +265,9 @@ def test_resume_upload_status_and_ranking_contracts():
     assert job_response.status_code == 200, job_response.text
     job_id = job_response.json()["id"]
 
-    valid_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
-    valid_docx.close()
+    valid_docx = tmp_path / "valid_resume.docx"
     make_docx(
-        valid_docx.name,
+        str(valid_docx),
         [
             "Alex Engineer",
             "alex@example.com",
@@ -256,7 +275,7 @@ def test_resume_upload_status_and_ranking_contracts():
             "Experience: 4 years building APIs and ETL pipelines.",
         ],
     )
-    with open(valid_docx.name, "rb") as f:
+    with valid_docx.open("rb") as f:
         upload_response = client.post(
             f"/jobs/{job_id}/resumes/",
             files={"file": ("alex_engineer.docx", f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
@@ -291,15 +310,21 @@ def test_resume_upload_status_and_ranking_contracts():
     assert isinstance(rankings, list)
     assert len(rankings) >= 1
     assert rankings[0]["overall_score"] >= rankings[-1]["overall_score"]
+    assert "skills_score" not in rankings[0]
+    assert "experience_score" not in rankings[0]
+    assert all(
+        description == job_response.json()["description"]
+        for description, _ in score_inputs
+    )
+    assert any("Alex Engineer" in resume_text for _, resume_text in score_inputs)
 
     paginated = client.get(f"/jobs/{job_id}/resumes/rankings?limit=1&offset=0", headers=headers)
     assert paginated.status_code == 200, paginated.text
     assert len(paginated.json()) == 1
 
-    irrelevant_docx = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
-    irrelevant_docx.close()
+    irrelevant_docx = tmp_path / "irrelevant_resume.docx"
     make_docx(
-        irrelevant_docx.name,
+        str(irrelevant_docx),
         [
             "Taylor Chef",
             "chef@example.com",
@@ -307,7 +332,7 @@ def test_resume_upload_status_and_ranking_contracts():
             "Experience: 6 years in restaurants and catering",
         ],
     )
-    with open(irrelevant_docx.name, "rb") as f:
+    with irrelevant_docx.open("rb") as f:
         irrelevant_upload = client.post(
             f"/jobs/{job_id}/resumes/",
             files={"file": ("cook.docx", f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
@@ -324,11 +349,52 @@ def test_resume_upload_status_and_ranking_contracts():
     assert ranked_by_id[relevant_id] > ranked_by_id[irrelevant_id]
 
 
+def test_resume_processing_failure_records_status_and_removes_file(monkeypatch, tmp_path):
+    recruiter_headers = register_login(f"upload_failure_{uuid.uuid4().hex[:8]}@example.com")
+    job_response = client.post(
+        "/jobs/",
+        json={"title": "Developer", "description": "Python", "required_skills": ["python"]},
+        headers=recruiter_headers,
+    )
+    assert job_response.status_code == 200, job_response.text
+
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    monkeypatch.setattr("app.routers.resumes.UPLOAD_DIR", str(upload_dir))
+    monkeypatch.setattr(
+        "app.routers.resumes.extract_text",
+        lambda _: (_ for _ in ()).throw(ValueError("invalid test document")),
+    )
+
+    response = client.post(
+        f"/jobs/{job_response.json()['id']}/resumes/",
+        files={"file": ("broken.docx", b"not a DOCX", "application/octet-stream")},
+        headers=recruiter_headers,
+    )
+
+    assert response.status_code == 422
+    assert list(upload_dir.iterdir()) == []
+    db = SessionLocal()
+    try:
+        failed_resume = (
+            db.query(Resume)
+            .filter(Resume.filename == "broken.docx")
+            .order_by(Resume.id.desc())
+            .first()
+        )
+        assert failed_resume is not None
+        assert failed_resume.status == "failed"
+        assert failed_resume.failure_reason
+    finally:
+        db.close()
+
+
 def test_seed_script_runs_cleanly():
+    backend_dir = Path(__file__).resolve().parents[1]
     for _ in range(2):
         result = subprocess.run(
             [sys.executable, "-m", "app.seed"],
-            cwd="/Users/macbook/develop/projects/smart-resume-screener/backend",
+            cwd=backend_dir,
             capture_output=True,
             text=True,
             check=True,

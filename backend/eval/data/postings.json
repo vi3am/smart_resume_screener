@@ -1,0 +1,47 @@
+[
+    {
+        "id": "p1",
+        "title": "Marketing Coordinator",
+        "description": "We are looking for a Marketing Coordinator to plan and run social media and content campaigns for our brand in Phnom Penh. You will work with designers and the sales team, track campaign results, and keep our channels active and consistent.",
+        "required_skills": [
+            "Social Media",
+            "Content Creation",
+            "Campaign Planning",
+            "Communication",
+            "Teamwork"
+        ],
+        "min_years_experience": 1,
+        "min_education_level": "bachelor",
+        "source": "drafted by student"
+    },
+    {
+        "id": "p2",
+        "title": "Graphic Designer",
+        "description": "We are hiring a Graphic Designer to create branding, print and digital designs. You will turn briefs into finished layouts, keep our visual identity consistent, and work closely with the marketing team.",
+        "required_skills": [
+            "Graphic Design",
+            "Adobe Photoshop",
+            "Adobe Illustrator",
+            "Branding",
+            "Layout"
+        ],
+        "min_years_experience": 2,
+        "min_education_level": "associate",
+        "source": "drafted by student"
+    },
+    {
+        "id": "p3",
+        "title": "Administrative Assistant",
+        "description": "We need an Administrative Assistant to support daily office operations. Duties include scheduling meetings, managing documents and records, handling correspondence, and coordinating with staff and visitors.",
+        "required_skills": [
+            "Office Administration",
+            "Scheduling",
+            "Microsoft Office",
+            "Communication",
+            "Record Keeping"
+        ],
+        "min_years_experience": 1,
+        "min_education_level": "high_school",
+        "source": "drafted by student"
+    }
+]

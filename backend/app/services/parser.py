@@ -16,6 +16,7 @@ import re
 import pdfplumber
 import docx
 import spacy
+from app.services.fields import education_levels, years_of_experience
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -316,11 +317,15 @@ def parse_resume(text: str) -> dict:
     if not name:
         name = _find_name_in_window(text)
 
+    completed, in_progress = education_levels(text)
     return {
         "name": name,
         "email": emails[0] if emails else None,
         "phone": phones[0].strip() if phones else None,
         "skills": found_skills,
+        "years_experience": years_of_experience(text),
+        "education_level": completed,
+        "education_in_progress": in_progress,
     }
 
 def _find_name_in_window(window_text: str) -> str | None:
