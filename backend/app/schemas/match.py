@@ -13,13 +13,11 @@ class MatchScoreOut(BaseModel):
         from_attributes = True
 
 class RankedCandidate(BaseModel):
-    """What the ranking dashboard endpoint actually returns — combines resume + score."""
+    """Resume fields and semantic-only overall score returned by the ranking endpoint."""
     resume_id: int
     filename: str
     candidate_name: str | None
     overall_score: float
-    skills_score: float | None
-    experience_score: float | None
 
     class Config:
         from_attributes = True

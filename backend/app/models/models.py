@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Float, func
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Float, Index, func
 from sqlalchemy import CheckConstraint, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from app.core.education import EDUCATION_LEVELS
@@ -61,6 +61,13 @@ class Resume(Base):
     
     __table_args__ = (
         CheckConstraint("status IN ('processing', 'done', 'failed')", name="ck_resumes_status"),
+        Index(
+            "uq_resumes_job_filename_active",
+            "job_id",
+            "filename",
+            unique=True,
+            postgresql_where=text("status IN ('processing', 'done')"),
+        ),
     )
 
 

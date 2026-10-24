@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.database import SessionLocal
 from app.models.models import JobPosting, Resume, User
+from app.services.parser import extract_text
 from main import app
 
 
@@ -272,7 +273,8 @@ def test_resume_upload_status_and_ranking_contracts(monkeypatch, tmp_path):
             "Alex Engineer",
             "alex@example.com",
             "Skills: python, sql, aws, fastapi",
-            "Experience: 4 years building APIs and ETL pipelines.",
+            "Experience: 2020 - 2022 building APIs and ETL pipelines.",
+            "Education: Bachelor of Science",
         ],
     )
     with valid_docx.open("rb") as f:
@@ -283,6 +285,12 @@ def test_resume_upload_status_and_ranking_contracts(monkeypatch, tmp_path):
         )
     assert upload_response.status_code == 200, upload_response.text
     assert upload_response.json()["status"] == "done"
+    parsed = upload_response.json()["parsed_data"]
+    assert parsed["email"] == "alex@example.com"
+    assert "years_experience" in parsed
+    assert parsed["years_experience"] > 0
+    assert parsed["education_level"] == "bachelor"
+    assert "education_in_progress" in parsed
 
     invalid_type = client.post(
         f"/jobs/{job_id}/resumes/",

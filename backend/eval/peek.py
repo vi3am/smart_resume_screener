@@ -4,6 +4,7 @@ import sys
 from app.services.scoring import score_cv
 from eval.config import AS_OF
 from eval.dataset import load
+from eval.metrics import precision_at_k, reciprocal_rank
 
 
 def main() -> int:
@@ -18,7 +19,7 @@ def main() -> int:
         posting, rel = ds.postings[pid], ds.relevant(pid)
         rows = sorted(((score_cv(posting, text, as_of=AS_OF), cv_id)
                        for cv_id, text in ds.cvs.items()),
-                      key=lambda row: -row[0].overall)
+                      key=lambda row: (-row[0].overall, row[1]))
         print(f"\n{pid} {posting['title']}  ({len(rel)} relevant)")
         print("rank  cv     label overall skills   exp   edu   sem   missing")
         for i, (r, cv_id) in enumerate(rows, 1):
@@ -26,6 +27,8 @@ def main() -> int:
             print(f"{i:>4}  {cv_id}  {lab:>5} {r.overall:7.1f} {r.skills:6.1f} "
                   f"{r.experience:5.1f} {r.education:5.1f} {r.semantic:5.1f}   "
                   f"{', '.join(r.missing_skills)}")
+        ranked = [cv_id for _, cv_id in rows]
+        print(f"P@5 = {precision_at_k(ranked, rel):.2f}   RR = {reciprocal_rank(ranked, rel):.2f}")
     return 0
 
 
