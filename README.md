@@ -103,14 +103,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ## 5) Install backend dependencies
 
 ```powershell
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-If the spaCy English model is not installed:
+The spaCy English model is pinned in `requirements.txt` with a SHA-256 hash and is installed by the command above. Verify that the active environment can load the model used by resume parsing:
 
 ```powershell
-python -m spacy download en_core_web_sm
+python -c "import spacy; spacy.load('en_core_web_sm'); print('spaCy model ready')"
 ```
+
+Do not remove or change the wheel's SHA-256 hash. Run this check in the same virtual environment that starts Uvicorn; the API loads this model for resume parsing.
 
 ## 6) Run database migrations
 
@@ -147,21 +149,42 @@ The frontend expects the backend at `http://localhost:8000`.
 
 ## 9) Run tests
 
+The API test suite includes a seed test that clears its database. Tests refuse to start unless `TEST_DATABASE_URL` points to a dedicated PostgreSQL database ending in `_test`; the test environment will not fall back to `backend/.env`.
+
+Create the dedicated test database once:
+
 ```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
+docker exec resume_screener_db psql -U admin -d postgres -c "CREATE DATABASE resume_screener_test;"
+```
+
+From the backend directory, set the test URL, migrate that database, and run the suite:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://admin:<password>@localhost:5433/resume_screener_test"
+$env:DATABASE_URL = $env:TEST_DATABASE_URL
+alembic upgrade head
 python -m pytest tests -q
 ```
 
+Replace `<password>` with your local PostgreSQL password. The test guard requires a database name ending in `_test`.
+From the backend directory, `bash verify.sh` uses this same dedicated test database and runs `alembic upgrade head` before testing, so the migration check and API tests target the same schema.
+
 ## 10) Seed demo data
+
+The seed command deletes existing records. It refuses to reset a database unless its name ends in `_test` or you explicitly set `ALLOW_DESTRUCTIVE_SEED=1`.
 
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
+$env:ALLOW_DESTRUCTIVE_SEED = "1"
 python -m app.seed
 ```
 
-This resets the local demo data and prints the seeded recruiter and job IDs.
+This resets the configured database and prints the seeded recruiter and job IDs. Do not use it against a production database.
+
+## Ranking behavior
+
+Resume rankings currently use semantic similarity between the job description and resume text only. The structured required-skills, experience, and education fields are not included in the score. The API returns only the overall score rather than placeholder component scores.
 
 ## Useful commands
 
@@ -214,11 +237,12 @@ alembic upgrade head
 
 ### `No module named pytest`
 
-Use the venv in the backend folder:
+Install the development dependencies in the backend virtual environment:
 
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
 python -m pytest tests -q
 ```
 
@@ -227,7 +251,8 @@ python -m pytest tests -q
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-python -m spacy download en_core_web_sm
+pip install -r requirements.txt
+python -c "import spacy; spacy.load('en_core_web_sm'); print('spaCy model ready')"
 ```
 
 ### Connection refused / database not reachable

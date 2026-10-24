@@ -4,13 +4,26 @@ resumes come from. Run manually — never imported by the app itself.
 
 Usage: python -m app.seed
 """
+import os
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from app.config import settings
 from app.models.models import User, JobPosting, Resume, MatchScore, ScoringRun, ScoringResult
 from app.core.security import hash_password
 
 
 def reset_data(db: Session) -> None:
+    database_name = make_url(settings.DATABASE_URL).database or ""
+    if (
+        not database_name.endswith("_test")
+        and os.environ.get("ALLOW_DESTRUCTIVE_SEED") != "1"
+    ):
+        raise RuntimeError(
+            "Refusing to clear a non-test database. Set ALLOW_DESTRUCTIVE_SEED=1 "
+            "to explicitly permit resetting this database."
+        )
+
     # Children first, to respect foreign keys before parents are removed.
     db.query(ScoringResult).delete()
     db.query(ScoringRun).delete()
