@@ -27,6 +27,7 @@ _OTHER_HEADINGS = {
     "about me", "interests", "achievements", "awards", "awards and certification", "contact",
     "volunteer experience", "volunteer experiences",
 }
+_NON_EDUCATION_HEADINGS = _OTHER_HEADINGS | _EXP_HEADINGS
 _EDU_WORDS = re.compile(
     r"university|college|school|institute|academy|bachelor|master|diploma|degree|baccalaureate",
     re.IGNORECASE,
@@ -90,12 +91,16 @@ def years_of_experience(text: str, as_of: date | None = None) -> float:
 _PATTERNS = [
     ("phd", re.compile(r"(?i:\bph\.?\s?d\b|\bdoctorate\b|\bdoctoral\b)")),
     ("master", re.compile(
-        r"(?i:\bmaster(?:'s|’s|s)?\s+(?:degree|of|in)\b)|\bM\.?Sc\b|\bMBA\b|\bM\.?Ed\b|\bM\.?Eng\b")),
+        r"(?i:\bmaster(?:'s|’s|s)?\s+(?:degree|of|in)\b|"
+        r"\bM\.?\s?(?:Sc|S|A|BA|Ed|Eng|Tech|Phil)|\bMBA)\b")),
     ("bachelor", re.compile(
-        r"(?i:\bbachelor(?:'s|’s|s)?\b)|\bB\.?A\.?\b|\bB\.?Sc\b|\bB\.?Ed\b|\bB\.?Eng\b")),
+        r"(?i:\bbachelor(?:'s|’s|s)?\b|"
+        r"B\.?\s?(?:A|Sc|S|Ed|Eng|Tech|BA|Com|CA)|LLB)\b")),
     ("associate", re.compile(
-        r"(?i:\bassociate(?:'s|’s)?\s+(?:degree|of|in)\b|\bhigher national diploma\b)|\bHND\b")),
-    ("high_school", re.compile(r"(?i:\bhigh\s*school\b|\bbaccalaureate\b|\bsecondary school\b)")),
+        r"(?i:\bassociate(?:'s|’s)?\s+(?:degree|of|in)\b|"
+        r"\bhigher national diploma\b|\b(?:A\.?A\.?S?\.?|A\.?S\.?|HND)\b)\b")),
+    ("high_school", re.compile(
+        r"(?i:\bhigh\s*school\b|\bbaccalaureate\b|\bsecondary school\b|\bGED\b)")),
 ]
 _STANDALONE = {"master": "master", "masters": "master",
             "bachelor": "bachelor", "bachelors": "bachelor", "phd": "phd"}
@@ -114,9 +119,28 @@ def _higher(current: str | None, new: str) -> str:
     return new if current is None or EDUCATION_RANK[new] > EDUCATION_RANK[current] else current
 
 
+def _education_lines(lines: list[str]) -> list[str]:
+    section = None
+    has_education_heading = False
+    tagged: list[tuple[str | None, str]] = []
+    for line in lines:
+        heading = _norm_heading(line)
+        if heading in _EDU_HEADINGS:
+            section = "education"
+            has_education_heading = True
+        elif heading in _NON_EDUCATION_HEADINGS:
+            section = "other"
+        else:
+            tagged.append((section, line))
+
+    if has_education_heading:
+        return [line for section, line in tagged if section == "education"]
+    return lines
+
+
 def education_levels(text: str) -> tuple[str | None, str | None]:
     """Return (highest completed level, highest in-progress level)."""
-    lines = text.splitlines()
+    lines = _education_lines(text.splitlines())
     completed = in_progress = None
     for i, line in enumerate(lines):
         levels = _levels_in_line(line)

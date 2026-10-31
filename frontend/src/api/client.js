@@ -1,9 +1,28 @@
 import axios from "axios";
-import { AUTH_LOGOUT_EVENT } from "../context/auth-context";
+import {
+    AUTH_LOGOUT_EVENT,
+    AUTH_TOKEN_REFRESH_EVENT,
+} from "../context/auth-context";
 
-const client = axios.create({
-    baseURL: "http://localhost:8000",
-});
+const baseURL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const client = axios.create({ baseURL, withCredentials: true });
+let refreshInFlight = null;
+
+function clearStoredAuth() {
+    localStorage.removeItem("token");
+}
+
+export function refreshAccessToken() {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = axios.post(`${baseURL}/auth/refresh`, {}, { withCredentials: true })
+        .then(({ data }) => {
+            localStorage.setItem("token", data.access_token);
+            window.dispatchEvent(new CustomEvent(AUTH_TOKEN_REFRESH_EVENT, { detail: data.access_token }));
+            return data.access_token;
+        })
+        .finally(() => { refreshInFlight = null; });
+    return refreshInFlight;
+}
 
 client.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
@@ -13,11 +32,23 @@ client.interceptors.request.use((config) => {
 
 client.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response?.status === 401) {
-            window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
+    async (error) => {
+        const config = error.config;
+        const authPath = /\/auth\/(login|register|refresh|logout)(?:\?|$)/.test(config?.url || "");
+        if (error.response?.status !== 401 || authPath || !config || config._authRetry) {
+            return Promise.reject(error);
         }
-        return Promise.reject(error);
+
+        config._authRetry = true;
+        try {
+            const accessToken = await refreshAccessToken();
+            config.headers.Authorization = `Bearer ${accessToken}`;
+            return client(config);
+        } catch {
+            clearStoredAuth();
+            window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
+            return Promise.reject(error);
+        }
     },
 );
 

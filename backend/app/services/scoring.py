@@ -32,6 +32,8 @@ _ALIASES = {
     "microsoft office": ["ms office", "microsoft word", "microsoft excel", "ms word", "ms excel"],
 }
 
+_SUFFIXES = ("ing", "ers", "er", "ions", "ion", "ed", "es")
+
 
 @dataclass
 class ScoreResult:
@@ -59,8 +61,33 @@ def _norm(text: str) -> str:
     return " " + re.sub(r"\s+", " ", s).strip() + " "
 
 
+def _root(token: str) -> str:
+    """Cheap, explainable word root: design / designer / designing -> design."""
+    if not token.isalpha() or len(token) < 4:
+        return token
+    for suffix in _SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= 4:
+            token = token[: -len(suffix)]
+            break
+    else:
+        if token.endswith("s") and not token.endswith("ss"):
+            token = token[:-1]
+    if len(token) > 4 and token.endswith("e"):
+        token = token[:-1]
+    return token
+
+
+def _roots(text: str) -> list[str]:
+    return [_root(t) for t in _norm(text).split()]
+
+
+def _contains(haystack: list[str], needle: list[str]) -> bool:
+    n = len(needle)
+    return n > 0 and any(haystack[i:i + n] == needle for i in range(len(haystack) - n + 1))
+
+
 def match_skills(required: Sequence[str], cv_text: str) -> tuple[list[str], list[str]]:
-    haystack = _norm(cv_text)
+    cv_roots = _roots(cv_text)
     matched: list[str] = []
     missing: list[str] = []
     seen: set[str] = set()
@@ -69,11 +96,9 @@ def match_skills(required: Sequence[str], cv_text: str) -> tuple[list[str], list
         if not key or key in seen:
             continue
         seen.add(key)
-        forms: set[str] = set()
-        for variant in {_norm(skill)} | {_norm(a) for a in _ALIASES.get(key, [])}:
-            forms.add(variant)
-            forms.add(variant[:-1] + "s ")  # simple plural
-        (matched if any(f in haystack for f in forms) else missing).append(skill.strip())
+        forms = [skill] + _ALIASES.get(key, [])
+        found = any(_contains(cv_roots, _roots(form)) for form in forms)
+        (matched if found else missing).append(skill.strip())
     return matched, missing
 
 

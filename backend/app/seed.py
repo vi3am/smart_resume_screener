@@ -9,7 +9,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.config import settings
-from app.models.models import User, JobPosting, Resume, MatchScore, ScoringRun, ScoringResult
+from app.models.models import User, JobPosting, Resume, MatchScore, RefreshToken, ScoringRun, ScoringResult
 from app.core.security import hash_password
 
 
@@ -28,6 +28,7 @@ def reset_data(db: Session) -> None:
     db.query(ScoringResult).delete()
     db.query(ScoringRun).delete()
     db.query(MatchScore).delete()
+    db.query(RefreshToken).delete()
     db.query(Resume).delete()
     db.query(JobPosting).delete()
     db.query(User).delete()

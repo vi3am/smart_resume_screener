@@ -141,6 +141,10 @@ def test_parse_resume_rejects_placeholder_text_as_candidate_name():
 def test_parse_resume_finds_name_after_resume_metadata_and_section_labels():
     samples = [
         (
+            "MAYA CHEN CONTACT\nEmail: maya@example.test\nInnovate Tech Company",
+            "MAYA CHEN",
+        ),
+        (
             "SUMMARY\nPROFILE\nHELENA WONG\n+65 9123 4567 | helena@gmail.com\nSkills\nCommunication, teamwork, leadership",
             "HELENA WONG",
         ),

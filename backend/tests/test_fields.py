@@ -65,3 +65,30 @@ def test_standalone_level_lines():
 
 def test_masters_in():
     assert education_levels("Masters in Product Design\nBA in Product Design") == ("master", None)
+
+
+def test_education_ignores_degree_like_phrases_outside_education_section():
+    text = (
+        "Professional Summary\n"
+        "Master of customer experience with a Bachelor of Arts degree.\n"
+        "Education\n"
+        "Bachelor of Arts, Communications\n"
+        "Work Experience\n"
+        "Master of Ceremonies at community events."
+    )
+
+    assert education_levels(text) == ("bachelor", None)
+
+
+def test_education_section_still_reports_completed_and_in_progress_degrees():
+    text = (
+        "Experience\n"
+        "Master of Customer Experience\n"
+        "Education\n"
+        "High School Diploma\n"
+        "Bachelor's Degree — Expected 2027\n"
+        "Skills\n"
+        "Master of Arts"
+    )
+
+    assert education_levels(text) == ("high_school", "bachelor")

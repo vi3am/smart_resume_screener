@@ -25,7 +25,7 @@ nlp = spacy.load("en_core_web_sm")
 # ---------------------------------------------------------------------------
 
 EMAIL_PATTERN = r"[\w.+-]+@[\w-]+\.[\w.-]+"
-PHONE_PATTERN = r"\+?\d[\d\s\-]{7,}\d"
+PHONE_PATTERN = r"\+?\d[\d \t().-]{7,}\d"
 
 # ---------------------------------------------------------------------------
 # Skill keywords
@@ -83,7 +83,14 @@ NAME_STOP_WORDS = {
 RESUME_SECTION_LABELS = {
     "summary", "experience", "education", "skills", "profile", "objective",
     "contact", "projects", "certifications", "references", "work", "history",
-    "languages", "interests", "detail", "details", "career",
+    "languages", "interests", "detail", "details", "career", "technical skills",
+    "professional skills", "key skills", "core skills", "soft skills",
+    "core competencies", "competencies", "expertise", "professional experience",
+    "work experience", "employment history", "work history", "academic history",
+    "academic background", "educational background", "professional summary",
+    "professional profile", "about me", "volunteer experience",
+    "volunteer experiences", "language skills", "language skill",
+    "computer skills", "computer skill",
 }
 
 INSTITUTION_TOKENS = {
@@ -107,9 +114,62 @@ JOB_TITLE_PHRASES = ("executive", "manager", "specialist", "analyst", "consultan
 # Text extraction
 # ---------------------------------------------------------------------------
 
+_SKILLS_HEADING_RE = re.compile(
+    r"^(?:(?:technical|professional|key|core|soft|hard|computer|language)\s+)?skills?"
+    r"(?:\s*[:\-–—]\s*(.*))?$",
+    re.IGNORECASE,
+)
+_SKILL_SENTENCE_WORDS = {
+    "a", "an", "and", "are", "across", "as", "by", "for", "from", "in",
+    "into", "is", "it", "of", "on", "or", "that", "the", "their", "through",
+    "to", "was", "were", "which", "with", "within",
+}
+_SKILL_SENTENCE_STARTS = {
+    "conducted", "created", "developed", "ensured", "established", "generated",
+    "increased", "launched", "maintaining", "managed", "operating", "provided",
+    "reduced", "scaled", "spearheaded", "successfully", "supporting",
+}
+_PLACEHOLDER_SKILL_WORDS = {
+    "aliquam", "adipiscing", "bibendum", "consectetur", "dolor", "elit",
+    "feugiat", "ipsum", "lacus", "lorem", "morbi", "nunc", "porta",
+    "scelerisque", "tempor", "turpis", "ultrices", "venenatis",
+}
+
+
+def _is_section_heading(line: str) -> bool:
+    heading = re.sub(r"[:\-–—]+$", "", line.strip()).strip().lower()
+    return (
+        heading in RESUME_SECTION_LABELS
+        or any(heading.startswith(f"{label} ") for label in RESUME_SECTION_LABELS)
+    )
+
+
+def _split_skill_items(line: str) -> list[str]:
+    line = re.sub(r"^\s*(?:[-*•▪◦]|\d+[.)])\s*", "", line).strip()
+    if not line:
+        return []
+    line = re.sub(r"^[^:]{1,30}:\s*", "", line)
+    return [
+        item.strip()
+        for item in re.split(r"\s*[,;|•▪◦]\s*", line)
+        if item.strip()
+    ]
+
+
+def _is_plausible_skill(item: str) -> bool:
+    if len(item) > 48 or item.endswith((".", "!", "?")):
+        return False
+    words = re.findall(r"[a-z0-9+#.]+", item.casefold())
+    if not words or len(words) > 5 or any(any(char.isdigit() for char in word) for word in words):
+        return False
+    word_set = set(words)
+    if word_set & _PLACEHOLDER_SKILL_WORDS or word_set & _SKILL_SENTENCE_WORDS:
+        return False
+    return words[0] not in _SKILL_SENTENCE_STARTS
+
+
 def extract_skills_section(text: str) -> list[str]:
-    """Fallback: if no keyword skills matched, grab bullet-like lines
-    following a 'Skills' heading, regardless of what words they contain."""
+    """Return listed skills, including terms outside the built-in vocabulary."""
     lines = text.splitlines()
     skills_lines = []
     capturing = False
@@ -119,14 +179,25 @@ def extract_skills_section(text: str) -> list[str]:
             if capturing:
                 break  # blank line ends the section
             continue
-        if stripped.lower() in ("skills", "key skills", "core skills"):
+        heading = _SKILLS_HEADING_RE.match(stripped)
+        if heading:
             capturing = True
+            if heading.group(1):
+                skills_lines.extend(_split_skill_items(heading.group(1)))
             continue
         if capturing:
-            if stripped.lower() in RESUME_SECTION_LABELS:
+            if _is_section_heading(stripped):
                 break  # hit the next section
-            skills_lines.append(stripped)
-    return skills_lines[:10]  # cap it, avoid grabbing runaway content
+            skills_lines.extend(_split_skill_items(stripped))
+    return [item for item in skills_lines if _is_plausible_skill(item)][:30]
+
+
+def _extract_phones(text: str) -> list[str]:
+    return [
+        phone.strip()
+        for phone in re.findall(PHONE_PATTERN, text)
+        if sum(character.isdigit() for character in phone) >= 9
+    ]
 
 def extract_text(file_path: str) -> str:
     if file_path.endswith(".pdf"):
@@ -287,13 +358,18 @@ def _header_window(text: str, max_lines: int = 8) -> str:
 
 def parse_resume(text: str) -> dict:
     emails = re.findall(EMAIL_PATTERN, text)
-    phones = re.findall(PHONE_PATTERN, text)
+    phones = _extract_phones(text)
 
     text_lower = text.lower()
-    found_skills = [skill for skill in COMMON_SKILLS if skill in text_lower]
-    if not found_skills:
-        found_skills = extract_skills_section(text)
-    # found_skills = [skill for skill in COMMON_SKILLS if skill in text_lower]
+    found_skills = [
+        skill for skill in COMMON_SKILLS
+        if re.search(rf"(?<!\w){re.escape(skill)}(?!\w)", text_lower)
+    ]
+    known_skills = {skill.casefold() for skill in found_skills}
+    for skill in extract_skills_section(text):
+        if skill.casefold() not in known_skills:
+            found_skills.append(skill)
+            known_skills.add(skill.casefold())
 
     # Priority 1: resume convention — the name is often in the first few
     # header lines, not necessarily the very first non-empty line. This
@@ -301,11 +377,15 @@ def parse_resume(text: str) -> dict:
     # templates with metadata, labels, and contact blocks before the actual name.
     name = None
     for line in text.splitlines()[:12]:
-        clean_line = line.strip()
-        if not clean_line:
+        candidate = line.strip()
+        if not candidate:
             continue
-        if looks_like_real_name(clean_line):
-            name = clean_line
+        if looks_like_real_name(candidate):
+            name = candidate
+            break
+        repaired = strip_known_noise(candidate)
+        if len(repaired.split()) >= 2 and looks_like_real_name(repaired):
+            name = repaired
             break
 
     

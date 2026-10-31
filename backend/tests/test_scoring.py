@@ -37,6 +37,19 @@ def test_skill_match_needs_whole_words():
     assert missing == ["Git"]
 
 
+def test_word_variants_match():
+    matched, _ = match_skills(
+        ["Graphic Design", "Marketing", "Scheduling"],
+        "Senior Graphics Designer and marketer; schedules meetings",
+    )
+    assert matched == ["Graphic Design", "Marketing", "Scheduling"]
+
+
+def test_variants_do_not_overmatch():
+    _, missing = match_skills(["Excel", "Illustrator"], "excellent communication and illustration")
+    assert missing == ["Excel", "Illustrator"]
+
+
 def test_no_required_skills_scores_100():
     assert skills_score(*match_skills([], "anything")) == 100.0
 

@@ -1,6 +1,7 @@
 import { createContext } from "react";
 
 export const AUTH_LOGOUT_EVENT = "auth:logout";
+export const AUTH_TOKEN_REFRESH_EVENT = "auth:token-refresh";
 
 export function getTokenExpiration(token) {
   if (typeof token !== "string") return null;
