@@ -1,0 +1,103 @@
+{
+  "split": "dev",
+  "commit": "81297b4",
+  "as_of": "2026-10-20",
+  "weights": {
+    "skills": 0.3,
+    "experience": 0.2,
+    "education": 0.1,
+    "semantic": 0.4
+  },
+  "postings": {
+    "p1": {
+      "title": "Marketing Coordinator",
+      "n_relevant": 6
+    },
+    "p2": {
+      "title": "Graphic Designer",
+      "n_relevant": 3
+    }
+  },
+  "results": {
+    "random (expected)": {
+      "p1": {
+        "p@5": 0.3087999999999977,
+        "rr": 0.5249874209124196
+      },
+      "p2": {
+        "p@5": 0.14700000000000055,
+        "rr": 0.3408637434460957
+      }
+    },
+    "skill_overlap": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 0.5
+      },
+      "p2": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "semantic_only": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 1.0
+      },
+      "p2": {
+        "p@5": 0.6,
+        "rr": 1.0
+      }
+    },
+    "hybrid": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 1.0
+      },
+      "p2": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_skills": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 1.0
+      },
+      "p2": {
+        "p@5": 0.2,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_experience": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 0.5
+      },
+      "p2": {
+        "p@5": 0.6,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_education": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 0.5
+      },
+      "p2": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_semantic": {
+      "p1": {
+        "p@5": 0.8,
+        "rr": 0.5
+      },
+      "p2": {
+        "p@5": 0.2,
+        "rr": 1.0
+      }
+    }
+  }
+}

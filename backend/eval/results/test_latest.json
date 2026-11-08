@@ -1,0 +1,67 @@
+{
+  "split": "test",
+  "commit": "bfdc194",
+  "as_of": "2026-10-20",
+  "weights": {
+    "skills": 0.4,
+    "experience": 0.2,
+    "education": 0.1,
+    "semantic": 0.3
+  },
+  "postings": {
+    "p3": {
+      "title": "Administrative Assistant",
+      "n_relevant": 2
+    }
+  },
+  "results": {
+    "random (expected)": {
+      "p3": {
+        "p@5": 0.09740000000000076,
+        "rr": 0.2750085782810239
+      }
+    },
+    "skill_overlap": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "semantic_only": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_skills": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_experience": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_education": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    },
+    "hybrid_without_semantic": {
+      "p3": {
+        "p@5": 0.4,
+        "rr": 1.0
+      }
+    }
+  }
+}
