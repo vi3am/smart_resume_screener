@@ -1,13 +1,16 @@
 # Dataset provenance
 
-- Labelling by: Not recorded. `labels.csv` currently has 23 rows without an AI-status prefix and 37 marked `[AI-REVIEWED]`.
-- Labelling dates: Exact review dates are not recorded. Git history shows the dataset was first committed on 2026-10-18 and labels were last changed on 2026-10-23.
-- Method: `RUBRIC.md` defines the interview-fit and required-skills criteria and says to label from anonymized CVs and postings without viewing model scores. The exact workflow used for each row is not recorded.
-- Model scores seen while labelling: Not recorded.
-- `split.json` fixed before labelling: Not recorded. The split and initial labelled dataset first appear in the same 2026-10-18 commit, so the repository history cannot establish their order.
-- Anything unusual: 37 labels remain marked `[AI-REVIEWED]`; these are not human-verified ground truth. `RUBRIC.md` also notes placeholder and very short CVs, plus likely duplicate candidate variants. Treat ranking metrics as exploratory, not validated results, until the labels and candidate set are reviewed.
-First-pass labels were produced with AI assistance (37 of 60 marked AI-reviewed) and kept unchanged in
-labels_ai_first_pass.csv. Final labels were assigned by me, by hand, on <dates>, from the anonymized CVs
-and RUBRIC.md, without model scores. Agreement with the AI first pass: <X%>, kappa <Y>.
-Limitation: p1 and p2 were relabelled after I had seen baseline scores for them; p3 was relabelled
-before any score for it existed.
+- `labels.csv` is the active evaluation file and contains 60 complete pairs with
+  no `[AI-DRAFT]` or `[AI-REVIEWED]` notes.
+- `labels_ai_first_pass.csv` preserves the earlier AI-assisted labels. It has
+  37 `[AI-REVIEWED]` notes; those archived labels are not used for evaluation.
+- Git history records human relabelling of p2 and p3 on 2026-10-28. Exact
+  review dates and the per-label workflow are not recorded.
+- `RUBRIC.md` defines the interview-fit and required-skills criteria. The
+  provenance of the split relative to the initial labelling is not established
+  by Git history.
+- Existing project notes say baseline scores had been seen before p1 and p2
+  were relabelled, while p3 was relabelled before seeing scores. Treat metrics
+  as exploratory rather than validated results.
+- The candidate set includes placeholder and very short CVs and likely
+  duplicate candidate variants; see `RUBRIC.md`.

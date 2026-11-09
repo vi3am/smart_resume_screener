@@ -17,6 +17,7 @@ from app.core.deps import get_current_user
 from app.models.models import MatchScore
 from app.schemas.match import RankedCandidate
 from app.services.matcher import score_resume
+from app.services.scan_check import SCANNED_MESSAGE, ScannedPdfError
 
 logger = logging.getLogger(__name__)
 
@@ -137,14 +138,19 @@ def upload_resume(
         _mark_resume_failed(db, resume.id, STORAGE_FAILURE_DETAIL)
         raise HTTPException(status_code=500, detail=STORAGE_FAILURE_DETAIL) from exc
     except Exception as exc:
-        logger.exception("Resume processing failed for resume_id=%s", resume.id)
+        if isinstance(exc, ScannedPdfError):
+            failure_detail = SCANNED_MESSAGE
+            logger.info("Scanned PDF rejected for resume_id=%s", resume.id)
+        else:
+            failure_detail = DOCUMENT_FAILURE_DETAIL
+            logger.exception("Resume processing failed for resume_id=%s", resume.id)
         db.rollback()
         try:
             Path(save_path).unlink(missing_ok=True)
         except OSError:
             logger.exception("Could not remove failed resume file for resume_id=%s", resume.id)
-        _mark_resume_failed(db, resume.id, DOCUMENT_FAILURE_DETAIL)
-        raise HTTPException(status_code=422, detail=DOCUMENT_FAILURE_DETAIL) from exc
+        _mark_resume_failed(db, resume.id, failure_detail)
+        raise HTTPException(status_code=422, detail=failure_detail) from exc
 
 
 @router.get("/", response_model=list[ResumeOut])

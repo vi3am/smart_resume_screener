@@ -2,13 +2,13 @@
 
 ## Dataset status
 
-`labels.csv` distinguishes proposed `[AI-DRAFT]` labels from labels reviewed
-by AI (`[AI-REVIEWED]`) and labels reviewed by the student (no status prefix).
-AI-reviewed labels are not human-verified ground truth. Validation fails while
-any `[AI-DRAFT]` notes remain and warns when AI-reviewed labels remain. Metrics
-based on AI-reviewed labels are exploratory; do not report them as validated
-results. Use `python -m eval.label --review` to confirm or change labels and
-replace their notes with your reasoning. The available uploads do not provide
+`labels.csv` contains the active evaluation labels. The original AI-assisted
+first pass is preserved separately in `labels_ai_first_pass.csv` for comparison
+and is not used to calculate evaluation metrics. Validation fails while any
+`[AI-DRAFT]` notes remain and warns if active labels are marked
+`[AI-REVIEWED]`; those labels are not human-verified ground truth. Use
+`python -m eval.label --review` to confirm or change active labels and replace
+their notes with your reasoning. The available uploads do not provide
 20 independent, usable CVs:
 `cv_02.txt` and `cv_08.txt` are placeholder templates, `cv_06.txt`, `cv_19.txt`,
 and `cv_20.txt` are very short samples, and some other files appear to be

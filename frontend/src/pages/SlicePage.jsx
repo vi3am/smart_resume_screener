@@ -45,14 +45,18 @@ function SlicePage() {
         }
 
         const formData = new FormData();
-        formData.append("file", selectedFile);
+        formData.append("files", selectedFile);
         setError("");
         setUploading(true);
         try {
-            const res = await client.post(`/jobs/${job.id}/resumes/`, formData);
-            setResume(res.data);
+            const res = await client.post(`/jobs/${job.id}/resumes/batch`, formData);
+            const result = res.data.results[0];
+            setResume(result);
             setSelectedFile(null);
             if (fileInput.current) fileInput.current.value = "";
+            if (result.status === "failed") {
+                setError(result.failure_reason || "Resume processing failed.");
+            }
         } catch (err) {
             setError(err.response?.data?.detail || err.message || "Upload failed");
         } finally {
@@ -127,9 +131,10 @@ function SlicePage() {
                     {uploading ? "Uploading..." : "Upload Resume"}
                 </button>
                 {resume && (
-                    <div className="mt-2 text-sm text-gray-700">
-                        <p>Uploaded: {resume.filename}</p>
+                    <div className={`mt-2 text-sm ${resume.status === "failed" ? "text-red-600" : "text-gray-700"}`}>
+                        <p>File: {resume.filename}</p>
                         <p>Status: {resume.status}</p>
+                        <p>Failure reason: {resume.failure_reason || "None"}</p>
                     </div>
                 )}
             </div>

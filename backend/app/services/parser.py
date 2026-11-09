@@ -16,6 +16,10 @@ import re
 import pdfplumber
 import docx
 import spacy
+from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
+from app.services.scan_check import SCANNED_MESSAGE, ScannedPdfError, is_scanned
 from app.services.fields import education_levels, years_of_experience
 
 nlp = spacy.load("en_core_web_sm")
@@ -116,6 +120,7 @@ JOB_TITLE_PHRASES = ("executive", "manager", "specialist", "analyst", "consultan
 
 _SKILLS_HEADING_RE = re.compile(
     r"^(?:(?:technical|professional|key|core|soft|hard|computer|language)\s+)?skills?"
+    r"(?:\s*(?:&|and)\s*expertise)?"
     r"(?:\s*[:\-–—]\s*(.*))?$",
     re.IGNORECASE,
 )
@@ -151,7 +156,7 @@ def _split_skill_items(line: str) -> list[str]:
     line = re.sub(r"^[^:]{1,30}:\s*", "", line)
     return [
         item.strip()
-        for item in re.split(r"\s*[,;|•▪◦]\s*", line)
+        for item in re.split(r"\s*[,;|\t•▪◦]+\s*", line)
         if item.strip()
     ]
 
@@ -202,10 +207,20 @@ def _extract_phones(text: str) -> list[str]:
 def extract_text(file_path: str) -> str:
     if file_path.endswith(".pdf"):
         with pdfplumber.open(file_path) as pdf:
-            return "\n".join(page.extract_text() or "" for page in pdf.pages)
+            pages = [page.extract_text() or "" for page in pdf.pages]
+        if is_scanned(pages):
+            raise ScannedPdfError(SCANNED_MESSAGE)
+        return "\n".join(pages)
     elif file_path.endswith(".docx"):
         d = docx.Document(file_path)
-        return "\n".join(p.text for p in d.paragraphs)
+        lines = []
+        for block in d.element.body.iterchildren():
+            if block.tag == qn("w:p"):
+                lines.append(Paragraph(block, d).text)
+            elif block.tag == qn("w:tbl"):
+                table = Table(block, d)
+                lines.extend("\t".join(cell.text for cell in row.cells) for row in table.rows)
+        return "\n".join(lines)
     raise ValueError(f"Unsupported file type: {file_path}")
 
 
@@ -360,16 +375,25 @@ def parse_resume(text: str) -> dict:
     emails = re.findall(EMAIL_PATTERN, text)
     phones = _extract_phones(text)
 
-    text_lower = text.lower()
-    found_skills = [
-        skill for skill in COMMON_SKILLS
-        if re.search(rf"(?<!\w){re.escape(skill)}(?!\w)", text_lower)
-    ]
+    found_skills = extract_skills_section(text)
+    section_skill_terms = [skill.casefold() for skill in found_skills]
     known_skills = {skill.casefold() for skill in found_skills}
-    for skill in extract_skills_section(text):
-        if skill.casefold() not in known_skills:
+    common_skill_matches = []
+    for skill in COMMON_SKILLS:
+        common_skill_matches.extend(
+            (match.start(), match.group())
+            for match in re.finditer(rf"(?<!\w){re.escape(skill)}(?!\w)", text, re.IGNORECASE)
+        )
+    for _, skill in sorted(common_skill_matches):
+        skill_key = skill.casefold()
+        if any(
+            re.search(rf"(?<!\w){re.escape(skill_key)}(?!\w)", listed_skill)
+            for listed_skill in section_skill_terms
+        ):
+            continue
+        if skill_key not in known_skills:
             found_skills.append(skill)
-            known_skills.add(skill.casefold())
+            known_skills.add(skill_key)
 
     # Priority 1: resume convention — the name is often in the first few
     # header lines, not necessarily the very first non-empty line. This

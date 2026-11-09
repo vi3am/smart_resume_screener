@@ -132,6 +132,10 @@ h1, h2, h3, p { margin-top: 0; }
 .candidate-section-heading p { font-size: 10px; }
 .candidate-actions { display: flex; gap: 8px; }
 .upload-queue { padding: 12px 14px; margin: 0 0 12px; background: white; border: 1px solid var(--line); border-radius: 9px; }
+.upload-results { display: grid; gap: 8px; margin: 12px 0; }
+.upload-result { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font-size: 12px; }
+.upload-result-failed { color: #8a3f39; background: #fff0ed; border-color: #f5d8d3; }
+.upload-result-filename { font-weight: 600; overflow-wrap: anywhere; }
 .upload-queue-heading, .upload-file-row { display: flex; align-items: center; gap: 10px; }
 .upload-queue-heading { justify-content: space-between; padding-bottom: 8px; color: #52645a; font-size: 10px; }
 .upload-queue-heading label { display: inline-flex; align-items: center; gap: 6px; color: #65766b; font-weight: 600; cursor: pointer; }

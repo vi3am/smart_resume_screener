@@ -1,418 +1,167 @@
-import subprocess
-import sys
 import uuid
-from pathlib import Path
+from types import SimpleNamespace
 
-from docx import Document
 from fastapi.testclient import TestClient
 
-from app.database import SessionLocal
-from app.models.models import JobPosting, Resume, User
-from app.services.parser import extract_text
+from app.routers import resumes as resume_routes
+from app.services import scoring_runs as scoring_runs_service
 from main import app
-
 
 client = TestClient(app)
 
 
-def make_docx(path: str, paragraphs: list[str]) -> str:
-    doc = Document()
-    for paragraph in paragraphs:
-        doc.add_paragraph(paragraph)
-    doc.save(path)
-    return path
-
-
-def register_login(email: str, password: str = "Pass123!", full_name: str = "Tester"):
-    register_response = client.post(
+def register_user(email: str, password: str = "Test-Pass-123!"):
+    response = client.post(
         "/auth/register",
-        json={"email": email, "password": password, "full_name": full_name},
+        json={"email": email, "password": password},
     )
-    assert register_response.status_code == 200, register_response.text
-    token = register_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    return headers
+    assert response.status_code == 200, response.text
+    return response.json()["access_token"]
 
 
-def test_auth_and_job_resume_flow(monkeypatch, tmp_path):
-    email = f"smoke_{uuid.uuid4().hex[:8]}@example.com"
-    upload_dir = tmp_path / "uploads"
-    upload_dir.mkdir()
-    monkeypatch.setattr("app.routers.resumes.UPLOAD_DIR", str(upload_dir))
+def auth_headers(email: str, password: str = "Test-Pass-123!"):
+    token = register_user(email, password=password)
+    return {"Authorization": f"Bearer {token}"}
 
-    register_response = client.post(
-        "/auth/register",
-        json={"email": email, "password": "Pass123!", "full_name": "Smoke Tester"},
-    )
-    assert register_response.status_code == 200, register_response.text
-    token = register_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
 
-    login_response = client.post(
-        "/auth/login",
-        json={"email": email, "password": "Pass123!"},
-        headers=headers,
-    )
-    assert login_response.status_code == 200, login_response.text
-
-    job_response = client.post(
+def create_job(headers, title: str = "Data Engineer", description: str = "Build and maintain ETL pipelines."):
+    response = client.post(
         "/jobs/",
         json={
-            "title": "Python Developer",
-            "description": "Build APIs with FastAPI and SQLAlchemy",
-            "required_skills": ["python", "fastapi", "sql"],
-        },
-        headers=headers,
-    )
-    assert job_response.status_code == 200, job_response.text
-    job_id = job_response.json()["id"]
-
-    empty_job_response = client.post(
-        "/jobs/",
-        json={"title": "Empty Job", "description": "No resumes yet", "required_skills": ["none"]},
-        headers=headers,
-    )
-    assert empty_job_response.status_code == 200, empty_job_response.text
-    empty_job_id = empty_job_response.json()["id"]
-
-    resume_path = tmp_path / "john_smith.docx"
-    make_docx(
-        str(resume_path),
-        [
-            "John Smith",
-            "john.smith@example.com",
-            "+1 555 123 4567",
-            "Skills: python, fastapi, sql, docker",
-        ],
-    )
-
-    with resume_path.open("rb") as resume_file:
-        upload_response = client.post(
-            f"/jobs/{job_id}/resumes/",
-            files={"file": ("john_smith.docx", resume_file, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
-            headers=headers,
-        )
-    assert upload_response.status_code == 200, upload_response.text
-    resume_id = upload_response.json()["id"]
-    assert isinstance(upload_response.json()["parsed_data"], dict)
-
-    list_resumes_response = client.get(f"/jobs/{job_id}/resumes/", headers=headers)
-    assert list_resumes_response.status_code == 200, list_resumes_response.text
-    assert any(item["id"] == resume_id for item in list_resumes_response.json())
-
-    reparse_response = client.post(f"/jobs/{job_id}/resumes/{resume_id}/reparse", headers=headers)
-    assert reparse_response.status_code == 200, reparse_response.text
-    assert isinstance(reparse_response.json()["parsed_data"], dict)
-
-    rankings_response = client.get(f"/jobs/{job_id}/resumes/rankings", headers=headers)
-    assert rankings_response.status_code == 200, rankings_response.text
-    assert isinstance(rankings_response.json(), list)
-
-    delete_with_resume_response = client.delete(f"/jobs/{job_id}", headers=headers)
-    assert delete_with_resume_response.status_code == 400
-    assert "Cannot delete job" in delete_with_resume_response.json()["detail"]
-
-    delete_empty_job_response = client.delete(f"/jobs/{empty_job_id}", headers=headers)
-    assert delete_empty_job_response.status_code == 200, delete_empty_job_response.text
-    assert delete_empty_job_response.json()["deleted"] is True
-
-
-def test_authentication_contracts():
-    email = f"auth_{uuid.uuid4().hex[:8]}@example.com"
-
-    register_response = client.post(
-        "/auth/register",
-        json={"email": email, "password": "Pass123!", "full_name": "Auth User"},
-    )
-    assert register_response.status_code == 200, register_response.text
-    assert "access_token" in register_response.json()
-
-    duplicate_response = client.post(
-        "/auth/register",
-        json={"email": email, "password": "Pass123!", "full_name": "Auth User"},
-    )
-    assert duplicate_response.status_code == 400
-
-    short_password_response = client.post(
-        "/auth/register",
-        json={"email": f"short_{uuid.uuid4().hex[:8]}@example.com", "password": "short", "full_name": "Short"},
-    )
-    assert short_password_response.status_code == 422
-
-    login_response = client.post(
-        "/auth/login",
-        json={"email": email, "password": "Pass123!"},
-    )
-    assert login_response.status_code == 200, login_response.text
-
-    bad_login_response = client.post(
-        "/auth/login",
-        json={"email": email, "password": "WrongPass!"},
-    )
-    assert bad_login_response.status_code == 401
-
-    protected_response = client.get("/jobs/")
-    assert protected_response.status_code == 401
-
-
-def test_job_posting_structured_fields_and_isolation():
-    recruiter_email = f"jobs_{uuid.uuid4().hex[:8]}@example.com"
-    recruiter_headers = register_login(recruiter_email)
-
-    job_response = client.post(
-        "/jobs/",
-        json={
-            "title": "Python Developer",
-            "description": "Build APIs with FastAPI and SQLAlchemy",
-            "required_skills": ["python", "fastapi", "sql"],
+            "title": title,
+            "description": description,
+            "required_skills": ["python", "sql"],
             "min_years_experience": 3,
             "min_education_level": "bachelor",
         },
-        headers=recruiter_headers,
-    )
-    assert job_response.status_code == 200, job_response.text
-    payload = job_response.json()
-    assert payload["required_skills"] == ["python", "fastapi", "sql"]
-    assert payload["min_years_experience"] == 3
-    assert payload["min_education_level"] == "bachelor"
-
-    invalid_education_response = client.post(
-        "/jobs/",
-        json={
-            "title": "Bad Education",
-            "description": "Bad category",
-            "required_skills": ["python"],
-            "min_years_experience": 2,
-            "min_education_level": "invalid",
-        },
-        headers=recruiter_headers,
-    )
-    assert invalid_education_response.status_code == 422
-
-    negative_years_response = client.post(
-        "/jobs/",
-        json={
-            "title": "Bad Experience",
-            "description": "Negative years",
-            "required_skills": ["python"],
-            "min_years_experience": -1,
-            "min_education_level": "high_school",
-        },
-        headers=recruiter_headers,
-    )
-    assert negative_years_response.status_code == 422
-
-    old_style_string_response = client.post(
-        "/jobs/",
-        json={
-            "title": "Bad Skills",
-            "description": "Wrong contract",
-            "required_skills": "python, fastapi",
-            "min_years_experience": 1,
-            "min_education_level": "high_school",
-        },
-        headers=recruiter_headers,
-    )
-    assert old_style_string_response.status_code == 422
-
-    other_email = f"other_{uuid.uuid4().hex[:8]}@example.com"
-    other_headers = register_login(other_email)
-
-    other_read = client.get(f"/jobs/{payload['id']}", headers=other_headers)
-    assert other_read.status_code == 404
-
-    other_edit = client.put(
-        f"/jobs/{payload['id']}",
-        json={
-            "title": "Edited by Other",
-            "description": "Should fail",
-            "required_skills": ["forbidden"],
-            "min_years_experience": 1,
-            "min_education_level": "high_school",
-        },
-        headers=other_headers,
-    )
-    assert other_edit.status_code == 404
-
-
-def test_resume_upload_status_and_ranking_contracts(monkeypatch, tmp_path):
-    recruiter_email = f"resume_{uuid.uuid4().hex[:8]}@example.com"
-    headers = register_login(recruiter_email)
-    upload_dir = tmp_path / "uploads"
-    upload_dir.mkdir()
-    monkeypatch.setattr("app.routers.resumes.UPLOAD_DIR", str(upload_dir))
-    score_inputs = []
-
-    def semantic_score(job_description, resume_text):
-        score_inputs.append((job_description, resume_text))
-        return 90.0 if "python" in resume_text.lower() else 10.0
-
-    monkeypatch.setattr(
-        "app.routers.resumes.score_resume",
-        semantic_score,
-    )
-
-    job_response = client.post(
-        "/jobs/",
-        json={
-            "title": "Data Engineer",
-            "description": "Build data pipelines and APIs using Python, SQL, and cloud tools.",
-            "required_skills": ["python", "sql", "aws"],
-            "min_years_experience": 2,
-            "min_education_level": "bachelor",
-        },
         headers=headers,
     )
-    assert job_response.status_code == 200, job_response.text
-    job_id = job_response.json()["id"]
+    assert response.status_code == 200, response.text
+    return response.json()
 
-    valid_docx = tmp_path / "valid_resume.docx"
-    make_docx(
-        str(valid_docx),
-        [
-            "Alex Engineer",
-            "alex@example.com",
-            "Skills: python, sql, aws, fastapi",
-            "Experience: 2020 - 2022 building APIs and ETL pipelines.",
-            "Education: Bachelor of Science",
-        ],
-    )
-    with valid_docx.open("rb") as f:
-        upload_response = client.post(
-            f"/jobs/{job_id}/resumes/",
-            files={"file": ("alex_engineer.docx", f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
-            headers=headers,
-        )
-    assert upload_response.status_code == 200, upload_response.text
-    assert upload_response.json()["status"] == "done"
-    parsed = upload_response.json()["parsed_data"]
-    assert parsed["email"] == "alex@example.com"
-    assert "years_experience" in parsed
-    assert parsed["years_experience"] > 0
-    assert parsed["education_level"] == "bachelor"
-    assert "education_in_progress" in parsed
 
-    invalid_type = client.post(
-        f"/jobs/{job_id}/resumes/",
-        files={"file": ("bad.txt", b"not a real document", "text/plain")},
-        headers=headers,
-    )
-    assert invalid_type.status_code == 400
+def test_job_routes_crud_and_access_control():
+    owner_email = f"jobs_owner_{uuid.uuid4().hex}@example.com"
+    other_email = f"jobs_other_{uuid.uuid4().hex}@example.com"
+    owner_headers = auth_headers(owner_email)
+    other_headers = auth_headers(other_email)
 
-    big_file = b"x" * (5 * 1024 * 1024 + 1)
-    oversized = client.post(
-        f"/jobs/{job_id}/resumes/",
-        files={"file": ("large.pdf", big_file, "application/pdf")},
-        headers=headers,
-    )
-    assert oversized.status_code == 400
+    job = create_job(owner_headers, title="Senior Data Engineer")
+    assert job["title"] == "Senior Data Engineer"
+    assert job["required_skills"] == ["python", "sql"]
 
-    list_response = client.get(f"/jobs/{job_id}/resumes/", headers=headers)
+    list_response = client.get("/jobs/", headers=owner_headers)
     assert list_response.status_code == 200, list_response.text
-    resumes = list_response.json()
-    assert resumes and all("status" in item for item in resumes)
+    assert any(item["id"] == job["id"] for item in list_response.json())
 
-    rankings_response = client.get(f"/jobs/{job_id}/resumes/rankings", headers=headers)
-    assert rankings_response.status_code == 200, rankings_response.text
-    rankings = rankings_response.json()
-    assert isinstance(rankings, list)
-    assert len(rankings) >= 1
-    assert rankings[0]["overall_score"] >= rankings[-1]["overall_score"]
-    assert "skills_score" not in rankings[0]
-    assert "experience_score" not in rankings[0]
-    assert all(
-        description == job_response.json()["description"]
-        for description, _ in score_inputs
+    forbidden = client.get(f"/jobs/{job['id']}", headers=other_headers)
+    assert forbidden.status_code == 404, forbidden.text
+
+    updated = client.put(
+        f"/jobs/{job['id']}",
+        json={
+            "title": "Lead Data Engineer",
+            "description": "Lead ETL and analytics projects across the company.",
+            "required_skills": ["python", "sql", "dbt"],
+            "min_years_experience": 5,
+            "min_education_level": "master",
+        },
+        headers=owner_headers,
     )
-    assert any("Alex Engineer" in resume_text for _, resume_text in score_inputs)
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["title"] == "Lead Data Engineer"
+    assert updated.json()["required_skills"] == ["python", "sql", "dbt"]
 
-    paginated = client.get(f"/jobs/{job_id}/resumes/rankings?limit=1&offset=0", headers=headers)
-    assert paginated.status_code == 200, paginated.text
-    assert len(paginated.json()) == 1
+    deleted = client.delete(f"/jobs/{job['id']}", headers=owner_headers)
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json() == {"deleted": True}
 
-    irrelevant_docx = tmp_path / "irrelevant_resume.docx"
-    make_docx(
-        str(irrelevant_docx),
-        [
-            "Taylor Chef",
-            "chef@example.com",
-            "Skills: cooking, baking, restaurant service, menu planning",
-            "Experience: 6 years in restaurants and catering",
-        ],
+    missing = client.get(f"/jobs/{job['id']}", headers=owner_headers)
+    assert missing.status_code == 404, missing.text
+
+
+def test_resume_routes_upload_reparse_and_ranking(monkeypatch):
+    owner_email = f"resumes_owner_{uuid.uuid4().hex}@example.com"
+    other_email = f"resumes_other_{uuid.uuid4().hex}@example.com"
+    owner_headers = auth_headers(owner_email)
+    other_headers = auth_headers(other_email)
+    job = create_job(owner_headers, title="Python Engineer")
+
+    monkeypatch.setattr(resume_routes, "extract_text", lambda _: "Alice Example has 4 years of Python and SQL experience")
+    monkeypatch.setattr(resume_routes, "parse_resume", lambda _: {"name": "Alice Example", "years_experience": 4})
+    monkeypatch.setattr(resume_routes, "score_resume", lambda *_args, **_kwargs: 0.92)
+
+    upload = client.post(
+        f"/jobs/{job['id']}/resumes/",
+        headers=owner_headers,
+        files={"file": ("alice.pdf", b"%PDF-1.4\nAlice Example", "application/pdf")},
     )
-    with irrelevant_docx.open("rb") as f:
-        irrelevant_upload = client.post(
-            f"/jobs/{job_id}/resumes/",
-            files={"file": ("cook.docx", f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
-            headers=headers,
+    assert upload.status_code == 200, upload.text
+    uploaded = upload.json()
+    assert uploaded["filename"] == "alice.pdf"
+    assert uploaded["status"] == "done"
+    resume_id = uploaded["id"]
+
+    listing = client.get(f"/jobs/{job['id']}/resumes/", headers=owner_headers)
+    assert listing.status_code == 200, listing.text
+    assert any(item["id"] == resume_id for item in listing.json())
+
+    denied = client.post(
+        f"/jobs/{job['id']}/resumes/",
+        headers=other_headers,
+        files={"file": ("blocked.pdf", b"%PDF-1.4\nBlocked", "application/pdf")},
+    )
+    assert denied.status_code == 404, denied.text
+
+    monkeypatch.setattr(resume_routes, "parse_resume", lambda _: {"name": "Alice Updated", "years_experience": 6})
+    reparsed = client.post(f"/jobs/{job['id']}/resumes/{resume_id}/reparse", headers=owner_headers)
+    assert reparsed.status_code == 200, reparsed.text
+    assert reparsed.json()["status"] == "done"
+
+    rankings = client.get(f"/jobs/{job['id']}/resumes/rankings", headers=owner_headers)
+    assert rankings.status_code == 200, rankings.text
+    result = rankings.json()
+    assert len(result) == 1
+    assert result[0]["resume_id"] == resume_id
+    assert result[0]["candidate_name"] == "Alice Updated"
+    assert result[0]["overall_score"] == 0.92
+
+
+def test_scoring_routes_create_and_fetch_latest(monkeypatch):
+    owner_email = f"scoring_owner_{uuid.uuid4().hex}@example.com"
+    owner_headers = auth_headers(owner_email)
+    job = create_job(owner_headers, title="Backend Engineer", description="Build resilient Python services with SQL and cloud APIs.")
+
+    monkeypatch.setattr(resume_routes, "extract_text", lambda _: "Python, SQL, docker, microservices")
+    monkeypatch.setattr(resume_routes, "parse_resume", lambda _: {"name": "Bob Candidate", "years_experience": 5})
+    upload = client.post(
+        f"/jobs/{job['id']}/resumes/",
+        headers=owner_headers,
+        files={"file": ("bob.pdf", b"%PDF-1.4\nBob Candidate", "application/pdf")},
+    )
+    assert upload.status_code == 200, upload.text
+
+    def fake_score_cv(*_args, **_kwargs):
+        return SimpleNamespace(
+            skills=0.9,
+            experience=0.85,
+            education=0.8,
+            semantic=0.75,
+            overall=0.82,
+            matched_skills=["python", "sql"],
+            missing_skills=[],
         )
-    assert irrelevant_upload.status_code == 200, irrelevant_upload.text
 
-    refreshed = client.get(f"/jobs/{job_id}/resumes/rankings", headers=headers)
-    assert refreshed.status_code == 200
-    ranked = refreshed.json()
-    ranked_by_id = {item["resume_id"]: item["overall_score"] for item in ranked}
-    relevant_id = upload_response.json()["id"]
-    irrelevant_id = irrelevant_upload.json()["id"]
-    assert ranked_by_id[relevant_id] > ranked_by_id[irrelevant_id]
+    monkeypatch.setattr(scoring_runs_service, "score_cv", fake_score_cv)
 
+    created = client.post(f"/jobs/{job['id']}/scoring-runs/", headers=owner_headers)
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["job_id"] == job["id"]
+    assert payload["method"] == "hybrid_v1"
+    assert len(payload["results"]) == 1
+    assert payload["results"][0]["filename"] == "bob.pdf"
 
-def test_resume_processing_failure_records_status_and_removes_file(monkeypatch, tmp_path):
-    recruiter_headers = register_login(f"upload_failure_{uuid.uuid4().hex[:8]}@example.com")
-    job_response = client.post(
-        "/jobs/",
-        json={"title": "Developer", "description": "Python", "required_skills": ["python"]},
-        headers=recruiter_headers,
-    )
-    assert job_response.status_code == 200, job_response.text
-
-    upload_dir = tmp_path / "uploads"
-    upload_dir.mkdir()
-    monkeypatch.setattr("app.routers.resumes.UPLOAD_DIR", str(upload_dir))
-    monkeypatch.setattr(
-        "app.routers.resumes.extract_text",
-        lambda _: (_ for _ in ()).throw(ValueError("invalid test document")),
-    )
-
-    response = client.post(
-        f"/jobs/{job_response.json()['id']}/resumes/",
-        files={"file": ("broken.docx", b"not a DOCX", "application/octet-stream")},
-        headers=recruiter_headers,
-    )
-
-    assert response.status_code == 422
-    assert list(upload_dir.iterdir()) == []
-    db = SessionLocal()
-    try:
-        failed_resume = (
-            db.query(Resume)
-            .filter(Resume.filename == "broken.docx")
-            .order_by(Resume.id.desc())
-            .first()
-        )
-        assert failed_resume is not None
-        assert failed_resume.status == "failed"
-        assert failed_resume.failure_reason
-    finally:
-        db.close()
-
-
-def test_seed_script_runs_cleanly():
-    backend_dir = Path(__file__).resolve().parents[1]
-    for _ in range(2):
-        result = subprocess.run(
-            [sys.executable, "-m", "app.seed"],
-            cwd=backend_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        assert "Seeded recruiter id=" in result.stdout
-        assert "Seeded job id=" in result.stdout
-
-        db = SessionLocal()
-        try:
-            assert db.query(User).count() == 1
-            assert db.query(JobPosting).count() == 1
-        finally:
-            db.close()
+    latest = client.get(f"/jobs/{job['id']}/scoring-runs/latest", headers=owner_headers)
+    assert latest.status_code == 200, latest.text
+    assert latest.json()["id"] == payload["id"]

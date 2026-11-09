@@ -61,9 +61,8 @@ def seed(db: Session) -> None:
     db.commit()
     db.refresh(job)
 
-    print(f"Seeded recruiter id={recruiter.id} (recruiter@example.com / SeedPass123)")
+    print(f"Seeded recruiter id={recruiter.id}")
     print(f"Seeded job id={job.id}: {job.title}")
-    print("Upload resumes to this job through /docs to continue the vertical slice.")
 
 
 if __name__ == "__main__":

@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.routers import auth, jobs, resumes, scoring
+from app.routers import auth, jobs, resumes, scoring, resume_batch
 from app.database import get_db
+
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -25,6 +26,7 @@ app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(resumes.router)
 app.include_router(scoring.router)
+app.include_router(resume_batch.router)
 
 
 # @app.get("/")
