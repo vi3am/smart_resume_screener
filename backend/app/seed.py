@@ -35,10 +35,18 @@ def reset_data(db: Session) -> None:
     db.commit()
 
 
-def seed(db: Session) -> None:
+def validate_seed_password(recruiter_password: str) -> None:
+    if len(recruiter_password.encode("utf-8")) < 16:
+        raise ValueError("SEED_RECRUITER_PASSWORD must be at least 16 UTF-8 bytes")
+    if len(recruiter_password.encode("utf-8")) > 72:
+        raise ValueError("SEED_RECRUITER_PASSWORD must be at most 72 UTF-8 bytes")
+
+
+def seed(db: Session, recruiter_password: str) -> None:
+    validate_seed_password(recruiter_password)
     recruiter = User(
         email="recruiter@example.com",
-        hashed_password=hash_password("SeedPass123"),
+        hashed_password=hash_password(recruiter_password),
         full_name="Demo Recruiter",
     )
     db.add(recruiter)
@@ -66,9 +74,19 @@ def seed(db: Session) -> None:
 
 
 if __name__ == "__main__":
+    recruiter_password = os.environ.get("SEED_RECRUITER_PASSWORD")
+    if not recruiter_password:
+        raise SystemExit(
+            "Set SEED_RECRUITER_PASSWORD to a unique password of at least 16 "
+            "UTF-8 bytes before seeding."
+        )
+    try:
+        validate_seed_password(recruiter_password)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     db = SessionLocal()
     try:
         reset_data(db)
-        seed(db)
+        seed(db, recruiter_password)
     finally:
         db.close()

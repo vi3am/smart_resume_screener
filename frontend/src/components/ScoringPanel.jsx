@@ -1,35 +1,36 @@
 import { useEffect, useState } from "react";
 import client from "../api/client";
 import { getErrorMessage } from "../api/errorMessage";
+import { filterScoredCandidates, shortlistToCsv } from "../utils/candidateResults";
+import { hasUnscoredResumes } from "../utils/scoringRun";
+import { clearScoringStale, isScoringStale } from "../utils/scoringState";
 
 function ScoreBar({ label, value }) {
   const score = Number(value) || 0;
   const width = Math.min(100, Math.max(0, score));
 
   return (
-    <div className="min-w-24">
-      <div className="mb-1 flex justify-between gap-2 text-xs text-slate-600">
+    <div className="score-cell">
+      <div className="score-label">
         <span>{label}</span>
         <span>{score.toFixed(1)}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full rounded-full bg-emerald-700" style={{ width: `${width}%` }} />
+      <div className="score-track">
+        <div style={{ width: `${width}%` }} />
       </div>
     </div>
   );
 }
 
 function SkillChips({ skills, matched }) {
-  if (!skills?.length) return <span className="text-sm text-slate-500">none</span>;
+  if (!skills?.length) return <span className="none-label">None</span>;
 
   return (
-    <div className="flex min-w-32 flex-wrap gap-1">
+    <div className="result-skills">
       {skills.map((skill) => (
         <span
           key={skill}
-          className={matched
-            ? "rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800"
-            : "rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600"}
+          className={matched ? "result-skill matched" : "result-skill missing"}
         >
           {skill}
         </span>
@@ -38,17 +39,21 @@ function SkillChips({ skills, matched }) {
   );
 }
 
-export default function ScoringPanel({ jobId, uploadVersion }) {
+export default function ScoringPanel({ jobId, uploadVersion, completedResumeCount }) {
   const [run, setRun] = useState(null);
   const [loadingRun, setLoadingRun] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
-  const [stale, setStale] = useState(false);
+  const [runNotice, setRunNotice] = useState("");
+  const [scoringStale, setScoringStale] = useState(() => isScoringStale(jobId));
+  const [scoredUploadVersion, setScoredUploadVersion] = useState(uploadVersion);
+  const [search, setSearch] = useState("");
+  const [minimumScore, setMinimumScore] = useState("0");
+  const [selectedResumeIds, setSelectedResumeIds] = useState(() => new Set());
+  const stale = scoringStale || uploadVersion > scoredUploadVersion || hasUnscoredResumes(run, completedResumeCount);
 
   useEffect(() => {
     let active = true;
-    setLoadingRun(true);
-    setError("");
     client.get(`/jobs/${jobId}/scoring-runs/latest`)
       .then(({ data }) => {
         if (active) setRun(data);
@@ -57,6 +62,10 @@ export default function ScoringPanel({ jobId, uploadVersion }) {
         if (!active) return;
         if (requestError.response?.status === 404) {
           setRun(null);
+          const detail = requestError.response.data?.detail;
+          setRunNotice(
+            detail === "Job requirements changed. Run scoring again." ? detail : "",
+          );
           return;
         }
         setError(getErrorMessage(requestError, "Could not load the latest scoring run."));
@@ -68,17 +77,16 @@ export default function ScoringPanel({ jobId, uploadVersion }) {
     return () => { active = false; };
   }, [jobId]);
 
-  useEffect(() => {
-    if (uploadVersion > 0) setStale(true);
-  }, [uploadVersion]);
-
   const runScoring = async () => {
     setError("");
+    setRunNotice("");
     setRunning(true);
     try {
       const { data } = await client.post(`/jobs/${jobId}/scoring-runs/`, undefined, { timeout: 120000 });
       setRun(data);
-      setStale(false);
+      setScoredUploadVersion(uploadVersion);
+      clearScoringStale(jobId);
+      setScoringStale(false);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Could not run scoring."));
     } finally {
@@ -86,50 +94,75 @@ export default function ScoringPanel({ jobId, uploadVersion }) {
     }
   };
 
+  const visibleResults = filterScoredCandidates(run?.results || [], search, minimumScore);
+  const shortlist = (run?.results || []).filter((result) => selectedResumeIds.has(result.resume_id));
+
+  const toggleShortlist = (resumeId, checked) => {
+    setSelectedResumeIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(resumeId);
+      else next.delete(resumeId);
+      return next;
+    });
+  };
+
+  const exportShortlist = () => {
+    const blob = new Blob(["\uFEFF", shortlistToCsv(shortlist)], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `job-${jobId}-shortlist.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <section className="panel scoring-panel">
+      <div className="scoring-heading">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Scoring results</h2>
-          <p className="mt-1 text-sm text-slate-600">Compare each processed resume against this role.</p>
+          <p className="eyebrow">MATCH ANALYSIS</p><h2>Scoring results</h2>
+          <p>Compare each processed resume against this role.</p>
         </div>
         <button
           type="button"
           onClick={runScoring}
           disabled={loadingRun || running}
-          className="rounded-md bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
+          className="button button-primary"
         >
           {running ? "Scoring..." : run ? "Re-run scoring" : "Run scoring"}
         </button>
       </div>
 
-      {loadingRun && <p className="mt-5 text-sm text-slate-600" role="status">Loading the latest scoring run...</p>}
+      {loadingRun && <p className="scoring-message" role="status">Loading the latest scoring run…</p>}
       {running && (
-        <p className="mt-5 text-sm text-slate-600" role="status">
+        <p className="scoring-message" role="status">
           Scoring resumes now. The first run may take up to a minute while the model loads.
         </p>
       )}
-      {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
+      {error && <p className="alert alert-error" role="alert">{error}</p>}
+      {runNotice && <p className="alert alert-warning" role="status">{runNotice}</p>}
       {stale && (
-        <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="status">
-          New resumes were uploaded. Run scoring again to include them.
+        <p className="alert alert-warning" role="status">
+          Candidate data changed. Run scoring again to refresh the ranking.
         </p>
       )}
 
       {!loadingRun && !error && !run && (
-        <p className="mt-5 rounded-md bg-slate-50 p-4 text-sm text-slate-600">
+        <p className="scoring-empty">
           No scoring run yet. Upload a resume, then run scoring to create a ranking.
         </p>
       )}
 
       {run && (
         <div className="mt-5">
-          <dl className="grid gap-3 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-3">
-            <div><dt className="text-slate-500">Run ID</dt><dd className="font-medium text-slate-900">{run.id}</dd></div>
-            <div><dt className="text-slate-500">Created</dt><dd className="font-medium text-slate-900">{new Date(run.created_at).toLocaleString()}</dd></div>
+          <dl className="run-metadata">
+            <div><dt>Run ID</dt><dd>{run.id}</dd></div>
+            <div><dt>Created</dt><dd>{new Date(run.created_at).toLocaleString()}</dd></div>
             <div>
-              <dt className="text-slate-500">Weights used</dt>
-              <dd className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-medium text-slate-900">
+              <dt>Weights used</dt>
+              <dd className="run-weights">
                 {Object.entries(run.weights || {}).map(([name, value]) => (
                   <span key={name}>{name}: {value}</span>
                 ))}
@@ -138,43 +171,88 @@ export default function ScoringPanel({ jobId, uploadVersion }) {
           </dl>
 
           {run.results.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-600">This run has no candidate results.</p>
+            <p className="scoring-empty">This run has no candidate results.</p>
           ) : (
-            <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
-              <table className="min-w-[940px] w-full divide-y divide-slate-200 text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
-                  <tr>
-                    <th scope="col" className="px-3 py-3">Rank</th>
-                    <th scope="col" className="px-3 py-3">Candidate</th>
-                    <th scope="col" className="px-3 py-3">Overall</th>
-                    <th scope="col" className="px-3 py-3">Skills</th>
-                    <th scope="col" className="px-3 py-3">Experience</th>
-                    <th scope="col" className="px-3 py-3">Education</th>
-                    <th scope="col" className="px-3 py-3">Semantic</th>
-                    <th scope="col" className="px-3 py-3">Matched skills</th>
-                    <th scope="col" className="px-3 py-3">Missing skills</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {run.results.map((result) => (
-                    <tr key={result.resume_id} className="align-top">
-                      <td className="px-3 py-4 font-semibold text-slate-900">{result.rank}</td>
-                      <td className="max-w-56 px-3 py-4">
-                        <div className="font-medium text-slate-900">{result.candidate_name || result.filename}</div>
-                        <div className="mt-1 break-all text-xs text-slate-500">{result.filename}</div>
-                      </td>
-                      <td className="px-3 py-4 font-semibold text-slate-900">{Number(result.overall_score).toFixed(1)}</td>
-                      <td className="px-3 py-4"><ScoreBar label="Skills" value={result.skills_score} /></td>
-                      <td className="px-3 py-4"><ScoreBar label="Experience" value={result.experience_score} /></td>
-                      <td className="px-3 py-4"><ScoreBar label="Education" value={result.education_score} /></td>
-                      <td className="px-3 py-4"><ScoreBar label="Semantic" value={result.semantic_score} /></td>
-                      <td className="px-3 py-4"><SkillChips skills={result.matched_skills} matched /></td>
-                      <td className="px-3 py-4"><SkillChips skills={result.missing_skills} matched={false} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="candidate-filters">
+                <label>
+                  Search candidates
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Name, filename, or skill"
+                  />
+                </label>
+                <label>
+                  Minimum match score
+                  <select value={minimumScore} onChange={(event) => setMinimumScore(event.target.value)}>
+                    <option value="0">Any score</option>
+                    <option value="50">50 and above</option>
+                    <option value="75">75 and above</option>
+                  </select>
+                </label>
+                <div className="shortlist-actions">
+                  <span>{shortlist.length} shortlisted</span>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={exportShortlist}
+                    disabled={shortlist.length === 0}
+                  >
+                    Export shortlist CSV
+                  </button>
+                </div>
+              </div>
+              {visibleResults.length === 0 ? (
+                <p className="scoring-empty">No candidates match these filters.</p>
+              ) : (
+                <div className="results-table-wrap">
+                  <table className="results-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Shortlist</th>
+                        <th scope="col">Rank</th>
+                        <th scope="col">Candidate</th>
+                        <th scope="col">Overall</th>
+                        <th scope="col">Skills</th>
+                        <th scope="col">Experience</th>
+                        <th scope="col">Education</th>
+                        <th scope="col">Semantic</th>
+                        <th scope="col">Matched skills</th>
+                        <th scope="col">Missing skills</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleResults.map((result) => (
+                        <tr key={result.resume_id}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              aria-label={`Add ${result.candidate_name || result.filename} to shortlist`}
+                              checked={selectedResumeIds.has(result.resume_id)}
+                              onChange={(event) => toggleShortlist(result.resume_id, event.target.checked)}
+                            />
+                          </td>
+                          <td><span className="rank-number">{result.rank}</span></td>
+                          <td className="result-candidate">
+                            <div>{result.candidate_name || result.filename}</div>
+                            <span>{result.filename}</span>
+                          </td>
+                          <td><strong className="overall-score">{Number(result.overall_score).toFixed(1)}<small>/100</small></strong></td>
+                          <td><ScoreBar label="Skills" value={result.skills_score} /></td>
+                          <td><ScoreBar label="Experience" value={result.experience_score} /></td>
+                          <td><ScoreBar label="Education" value={result.education_score} /></td>
+                          <td><ScoreBar label="Semantic" value={result.semantic_score} /></td>
+                          <td><SkillChips skills={result.matched_skills} matched /></td>
+                          <td><SkillChips skills={result.missing_skills} matched={false} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import client from "../api/client";
 import { getErrorMessage } from "../api/errorMessage";
+import { MAX_RESUME_UPLOAD_FILES } from "../utils/uploadLimits";
+import { markScoringStale } from "../utils/scoringState";
 
 export default function UploadPanel({ jobId, onUploadSuccess }) {
   const fileInput = useRef(null);
@@ -16,9 +18,9 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
     setError("");
     setUploaded(false);
 
-    if (files.length > 5) {
+    if (files.length > MAX_RESUME_UPLOAD_FILES) {
       setSelectedFiles([]);
-      setError("Choose no more than 5 files per selection. No files were uploaded.");
+      setError(`Choose no more than ${MAX_RESUME_UPLOAD_FILES} files per selection. No files were uploaded.`);
       return;
     }
 
@@ -36,6 +38,7 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
       const { data } = await client.post(`/jobs/${jobId}/resumes/batch`, formData);
       setOutcomes(data.results.map((result, index) => ({ ...result, key: `${result.filename}:${index}` })));
       if (data.done > 0) {
+        markScoringStale(jobId);
         onUploadSuccess();
         setUploaded(true);
       }
@@ -48,11 +51,11 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-lg font-semibold text-slate-900">Upload resumes</h2>
-      <p className="mt-1 text-sm text-slate-600">Choose up to 5 PDF or DOCX files, 5 MB each.</p>
+    <section className="panel upload-panel">
+      <p className="eyebrow">BUILD YOUR SHORTLIST</p><h2>Upload resumes</h2>
+      <p className="panel-lede">Choose up to {MAX_RESUME_UPLOAD_FILES} PDF or DOCX files, 5 MB each.</p>
 
-      <label htmlFor="resume-files" className="mt-4 block text-sm font-medium text-slate-800">
+      <label htmlFor="resume-files" className="field-label">
         Resume files
       </label>
       <input
@@ -63,11 +66,11 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
         accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         onChange={selectFiles}
         disabled={busy}
-        className="mt-2 block w-full rounded-md border border-slate-300 p-2 text-sm text-slate-700 file:mr-3 file:rounded file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-emerald-800"
+        className="upload-input"
       />
 
       {selectedFiles.length > 0 && (
-        <p className="mt-2 text-sm text-slate-600" aria-live="polite">
+        <p className="selected-files" aria-live="polite">
           Selected: {selectedFiles.map((file) => file.name).join(", ")}
         </p>
       )}
@@ -75,32 +78,32 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
         type="button"
         onClick={uploadFiles}
         disabled={busy || selectedFiles.length === 0}
-        className="mt-4 rounded-md bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
+        className="button button-primary"
       >
         {busy ? "Uploading and parsing..." : "Upload selected files"}
       </button>
 
-      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
+      {error && <p className="alert alert-error" role="alert">{error}</p>}
       {busy && (
-        <p className="mt-3 text-sm text-slate-600" role="status">
+        <p className="scoring-message" role="status">
           Uploading and parsing {selectedFiles.length} file{selectedFiles.length === 1 ? "" : "s"}...
         </p>
       )}
       {uploaded && (
-        <p className="mt-3 text-sm text-emerald-800" role="status">
+        <p className="alert alert-success" role="status">
           Upload complete. Run scoring again to include the new resume.
         </p>
       )}
 
       {outcomes.length > 0 && (
-        <ul className="mt-4 divide-y divide-slate-100 rounded-md border border-slate-200">
+        <ul className="upload-outcomes">
           {outcomes.map((outcome) => (
-            <li key={outcome.key} className={`flex flex-wrap items-start justify-between gap-2 p-3 text-sm ${outcome.status === "failed" ? "text-red-700" : ""}`}>
-              <span className="break-all">{outcome.filename}</span>
-              <span className={outcome.status === "done" ? "font-medium text-emerald-700" : "font-medium text-red-700"}>
+            <li key={outcome.key} className={outcome.status === "failed" ? "failed" : ""}>
+              <span>{outcome.filename}</span>
+              <strong className={outcome.status === "done" ? "ready" : "failed-status"}>
                 {outcome.status}
-              </span>
-              <span className="w-full">Failure reason: {outcome.failure_reason || "None"}</span>
+              </strong>
+              <small>Failure reason: {outcome.failure_reason || "None"}</small>
             </li>
           ))}
         </ul>
