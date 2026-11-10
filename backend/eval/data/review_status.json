@@ -1,0 +1,7 @@
+{
+  "candidate_set_reviewed": false,
+  "label_blinding_confirmed": false,
+  "split_provenance_confirmed": false,
+  "reviewer_count": 1,
+  "notes": "The current CV set includes placeholders, short samples, and likely duplicate candidate variants. Label rationales are missing, and prior metric exposure means the split must be re-established before confirmatory reporting."
+}

@@ -5,7 +5,6 @@
 """
 import argparse
 import json
-import random
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,12 +12,12 @@ from pathlib import Path
 from app.services.scoring import DEFAULT_WEIGHTS
 from eval.components import compute
 from eval.config import AS_OF
-from eval.dataset import load, validate
-from eval.metrics import precision_at_k, rank_by_score, reciprocal_rank
+from eval.dataset import evaluation_readiness_reasons, load, validate
+from eval.metrics import expected_random_metrics, precision_at_k, rank_by_score, reciprocal_rank
 
 RESULTS = Path(__file__).parent / "results"
 TEST_LOG = RESULTS / "test_runs.log"
-K, RANDOM_TRIALS = 5, 1000
+K = 5
 
 
 def combine(comps, weights):
@@ -32,16 +31,6 @@ def ablations():
         w = {k: (0.0 if k == drop else v) for k, v in DEFAULT_WEIGHTS.items()}
         out[f"hybrid_without_{drop}"] = lambda c, w=w: combine(c, w)
     return out
-
-
-def random_baseline(ids, relevant):
-    p5 = rr = 0.0
-    for seed in range(RANDOM_TRIALS):
-        order = list(ids)
-        random.Random(seed).shuffle(order)
-        p5 += precision_at_k(order, relevant, K)
-        rr += reciprocal_rank(order, relevant)
-    return p5 / RANDOM_TRIALS, rr / RANDOM_TRIALS
 
 
 def git_commit():
@@ -65,6 +54,8 @@ def main() -> int:
 
     split = "test" if args.final else "dev"
     pids = ds.split[split]
+    readiness_reasons = evaluation_readiness_reasons(ds)
+
     if args.final and TEST_LOG.exists() and TEST_LOG.read_text(encoding="utf-8").strip() and not args.again:
         print("The test posting was already evaluated (eval/results/test_runs.log).")
         print("A repeat counts as tuning on the test set. Use --again only if you will report it.")
@@ -78,14 +69,31 @@ def main() -> int:
         **ablations(),
     }
 
-    results = {"random (expected)": {pid: random_baseline(sorted(comps[pid]), ds.relevant(pid)) for pid in pids}}
+    results = {
+        "random (exact expectation)": {
+            pid: expected_random_metrics(sorted(comps[pid]), ds.relevant(pid), K)
+            for pid in pids
+        }
+    }
+    top_k = {}
     for name, fn in methods.items():
         results[name] = {}
+        top_k[name] = {}
         for pid in pids:
             ranked, rel = rank_by_score(fn(comps[pid])), ds.relevant(pid)
             results[name][pid] = (precision_at_k(ranked, rel, K), reciprocal_rank(ranked, rel))
+            top_k[name][pid] = [
+                {"cv_id": cv_id, "relevant": cv_id in rel}
+                for cv_id in ranked[:K]
+            ]
 
-    print(f"split={split}  commit={git_commit()}  as_of={AS_OF}  weights={DEFAULT_WEIGHTS}")
+    evaluation_status = "exploratory" if readiness_reasons else "ready for reporting"
+    print(
+        f"split={split}  evaluation_status={evaluation_status}  "
+        f"commit={git_commit()}  as_of={AS_OF}  weights={DEFAULT_WEIGHTS}"
+    )
+    for reason in readiness_reasons:
+        print(f"  limitation: {reason}")
     for pid in pids:
         n_rel = len(ds.relevant(pid))
         print(f"  {pid} {ds.postings[pid]['title']}: {n_rel} relevant of {len(ds.cvs)}, "
@@ -101,8 +109,11 @@ def main() -> int:
     RESULTS.mkdir(exist_ok=True)
     payload = {
         "split": split, "commit": git_commit(), "as_of": str(AS_OF), "weights": DEFAULT_WEIGHTS,
+        "evaluation_status": evaluation_status,
+        "readiness_reasons": readiness_reasons,
         "postings": {pid: {"title": ds.postings[pid]["title"], "n_relevant": len(ds.relevant(pid))} for pid in pids},
         "results": {m: {pid: {"p@5": v[0], "rr": v[1]} for pid, v in per.items()} for m, per in results.items()},
+        "top_k": top_k,
     }
     (RESULTS / f"{split}_latest.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     if args.final:

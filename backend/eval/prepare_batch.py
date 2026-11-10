@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from app.services.parser import extract_text
-from eval.dataset import DATA_DIR, EXPECTED_CVS
+from eval.dataset import DATA_DIR, MIN_CVS
 from eval.pii import find_pii, redact
 
 RAW_DIR = Path(__file__).parent / "raw"
@@ -103,7 +103,7 @@ def main() -> int:
             writer.writerows(new_map)
 
     total = len(list(CV_DIR.glob("cv_*.txt")))
-    print(f"\n{total} CVs in the dataset, target {EXPECTED_CVS}.")
+    print(f"\n{total} CVs in the dataset; the current evaluation minimum is {MIN_CVS}.")
     print("Now OPEN every new cv_XX.txt and read it. Street addresses, employer or school "
         "names that identify a person, and names you did not list are not redacted.")
     return 0

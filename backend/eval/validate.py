@@ -17,7 +17,12 @@ def main() -> int:
     if errors:
         print(f"FAIL: {len(errors)} error(s)")
         return 1
-    print(f"PASS: {len(ds.postings)} postings x {len(ds.cvs)} CVs = {len(ds.labels)} labelled pairs")
+    print(
+        f"PASS: structurally valid dataset: {len(ds.postings)} postings x "
+        f"{len(ds.cvs)} CVs = {len(ds.labels)} labelled pairs"
+    )
+    if warnings:
+        print("LIMITATION: Evaluation evidence is exploratory; resolve the warnings before claiming accuracy.")
     return 0
 
 

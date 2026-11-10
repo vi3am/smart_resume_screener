@@ -1,12 +1,12 @@
 {
   "split": "dev",
-  "commit": "81297b4",
+  "commit": "868b635",
   "as_of": "2026-10-20",
   "weights": {
-    "skills": 0.3,
+    "skills": 0.4,
     "experience": 0.2,
     "education": 0.1,
-    "semantic": 0.4
+    "semantic": 0.3
   },
   "postings": {
     "p1": {
@@ -52,7 +52,7 @@
     "hybrid": {
       "p1": {
         "p@5": 0.8,
-        "rr": 1.0
+        "rr": 0.5
       },
       "p2": {
         "p@5": 0.4,
@@ -75,7 +75,7 @@
         "rr": 0.5
       },
       "p2": {
-        "p@5": 0.6,
+        "p@5": 0.4,
         "rr": 1.0
       }
     },

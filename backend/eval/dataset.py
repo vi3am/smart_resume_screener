@@ -9,8 +9,8 @@ from app.core.education import EDUCATION_LEVELS
 from eval.pii import find_pii
 
 DATA_DIR = Path(__file__).parent / "data"
-EXPECTED_POSTINGS = 3
-EXPECTED_CVS = 20
+MIN_POSTINGS = 3
+MIN_CVS = 20
 REQUIRED_POSTING_KEYS = {
     "id", "title", "description", "required_skills",
     "min_years_experience", "min_education_level",
@@ -23,12 +23,43 @@ class Dataset:
     cvs: dict[str, str]
     labels: dict[tuple[str, str], str]
     split: dict
+    label_notes: dict[tuple[str, str], str] = field(default_factory=dict)
+    review_status: dict = field(default_factory=dict)
     duplicate_labels: list[tuple[str, str]] = field(default_factory=list)
     draft_labels: set[tuple[str, str]] = field(default_factory=set)
     ai_reviewed_labels: set[tuple[str, str]] = field(default_factory=set)
 
     def relevant(self, posting_id: str) -> set[str]:
         return {cv for (pid, cv), y in self.labels.items() if pid == posting_id and y == "1"}
+
+
+def evaluation_readiness_reasons(ds: Dataset) -> list[str]:
+    """Return limits that make ranking metrics exploratory rather than conclusive."""
+    reasons = []
+    missing_notes = sum(not ds.label_notes.get(key, "").strip() for key in ds.labels)
+    if missing_notes:
+        reasons.append(
+            f"{missing_notes} of {len(ds.labels)} labels have no recorded human rationale"
+        )
+    if not ds.review_status.get("candidate_set_reviewed", False):
+        reasons.append("candidate independence and source quality have not been verified")
+    if not ds.review_status.get("label_blinding_confirmed", False):
+        reasons.append("blind human review of the active labels has not been confirmed")
+    if not ds.review_status.get("split_provenance_confirmed", False):
+        reasons.append("the held-out split's independence from prior tuning has not been confirmed")
+    test_count = len(ds.split.get("test", []))
+    if test_count < 3:
+        reasons.append(
+            f"the held-out split has {test_count} posting(s); results cannot establish "
+            "generalization across jobs"
+        )
+    for pid in ds.postings:
+        relevant_count = len(ds.relevant(pid))
+        if relevant_count < 3 or relevant_count > 10:
+            reasons.append(
+                f"{pid} has {relevant_count} relevant CVs out of {len(ds.cvs)}"
+            )
+    return reasons
 
 
 def load(data_dir: Path = DATA_DIR) -> Dataset:
@@ -40,6 +71,7 @@ def load(data_dir: Path = DATA_DIR) -> Dataset:
     cvs = {f.stem: f.read_text(encoding="utf-8") for f in sorted((data_dir / "cvs").glob("*.txt"))}
 
     labels: dict[tuple[str, str], str] = {}
+    label_notes: dict[tuple[str, str], str] = {}
     duplicates: list[tuple[str, str]] = []
     draft_labels: set[tuple[str, str]] = set()
     ai_reviewed_labels: set[tuple[str, str]] = set()
@@ -50,17 +82,26 @@ def load(data_dir: Path = DATA_DIR) -> Dataset:
                 duplicates.append(key)
             labels[key] = row["label"].strip()
             notes = row.get("notes", "").strip()
+            label_notes[key] = notes
             if notes.startswith("[AI-DRAFT]"):
                 draft_labels.add(key)
             elif notes.startswith("[AI-REVIEWED]"):
                 ai_reviewed_labels.add(key)
 
     split = json.loads((data_dir / "split.json").read_text(encoding="utf-8"))
+    review_status_path = data_dir / "review_status.json"
+    review_status = (
+        json.loads(review_status_path.read_text(encoding="utf-8"))
+        if review_status_path.exists()
+        else {}
+    )
     return Dataset(
         postings,
         cvs,
         labels,
         split,
+        label_notes,
+        review_status,
         duplicates,
         draft_labels,
         ai_reviewed_labels,
@@ -71,8 +112,8 @@ def validate(ds: Dataset) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
 
-    if len(ds.postings) != EXPECTED_POSTINGS:
-        errors.append(f"expected {EXPECTED_POSTINGS} postings, found {len(ds.postings)}")
+    if len(ds.postings) < MIN_POSTINGS:
+        errors.append(f"expected at least {MIN_POSTINGS} postings, found {len(ds.postings)}")
     for pid, p in ds.postings.items():
         missing = REQUIRED_POSTING_KEYS - p.keys()
         if missing:
@@ -88,8 +129,8 @@ def validate(ds: Dataset) -> tuple[list[str], list[str]]:
         if p["min_education_level"] not in EDUCATION_LEVELS:
             errors.append(f"posting {pid}: min_education_level must be one of {EDUCATION_LEVELS}")
 
-    if len(ds.cvs) != EXPECTED_CVS:
-        errors.append(f"expected {EXPECTED_CVS} CVs, found {len(ds.cvs)}")
+    if len(ds.cvs) < MIN_CVS:
+        errors.append(f"expected at least {MIN_CVS} CVs, found {len(ds.cvs)}")
     for cv_id, text in ds.cvs.items():
         if not text.strip():
             errors.append(f"{cv_id}: file is empty")
@@ -124,6 +165,26 @@ def validate(ds: Dataset) -> tuple[list[str], list[str]]:
             f"{len(ds.ai_reviewed_labels)} label(s) were reviewed by AI, not a student; "
             "ranking metrics are exploratory and are not human-verified ground truth"
         )
+    if ds.labels:
+        missing_notes = sum(not ds.label_notes.get(key, "").strip() for key in ds.labels)
+        if missing_notes:
+            warnings.append(
+                f"{missing_notes} of {len(ds.labels)} labels have no recorded human rationale; "
+                "reference judgements are not independently auditable"
+            )
+    if not ds.review_status.get("candidate_set_reviewed", False):
+        warnings.append(
+            "candidate independence and source quality have not been verified; "
+            "ranking evidence remains exploratory"
+        )
+    if not ds.review_status.get("label_blinding_confirmed", False):
+        warnings.append(
+            "blind human review of active labels has not been confirmed"
+        )
+    if not ds.review_status.get("split_provenance_confirmed", False):
+        warnings.append(
+            "the held-out split's independence from prior tuning has not been confirmed"
+        )
 
     for pid in ds.postings:
         labelled = {cv for (p, cv), y in ds.labels.items() if p == pid and y in {"0", "1"}}
@@ -136,8 +197,13 @@ def validate(ds: Dataset) -> tuple[list[str], list[str]]:
             warnings.append(f"posting {pid}: {n_rel} relevant of {n_all}; 3-10 gives a more informative P@5/MRR")
 
     dev, test = ds.split.get("dev", []), ds.split.get("test", [])
-    if len(dev) != 2 or len(test) != 1:
-        errors.append("split must have exactly 2 dev postings and 1 test posting")
+    if not dev or not test:
+        errors.append("split must contain at least one dev posting and one test posting")
+    if len(test) < 3:
+        warnings.append(
+            f"test split has {len(test)} posting(s); held-out results cannot establish "
+            "generalization across jobs"
+        )
     if set(dev) & set(test):
         errors.append("a posting is in both dev and test")
     if set(dev) | set(test) != set(ds.postings):

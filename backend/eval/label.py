@@ -2,8 +2,8 @@
 
 Usage (from backend/):  python -m eval.label [p1 p2 p3]
 At the prompt:  1 = relevant, 0 = not relevant, s = skip, u = undo, q = quit.
-Add a note after the label, e.g.:  1 borderline, 1 year of internship only
-Use --review to confirm or change existing labels, including AI-drafted labels.
+Add a short reason after each new or changed label, e.g.:  1 relevant, internship and 4/5 required skills.
+Use --review to blindly review existing labels; `s reason` records a rationale while keeping a label.
 """
 import csv
 import json
@@ -61,7 +61,7 @@ def main() -> int:
     parser.add_argument(
         "--review",
         action="store_true",
-        help="review existing labels; s keeps the current label",
+        help="blindly review existing labels; s keeps the current label",
     )
     args = parser.parse_args()
 
@@ -98,11 +98,6 @@ def main() -> int:
             done_here = len(order) - len(todo) + 1
             position = f"{done_here}/{len(order)} for {pid}"
             if args.review:
-                current = rows[(pid, cv_id)]
-                print(
-                    f"Current label: {current['label']}; "
-                    f"note: {current.get('notes', '')}"
-                )
                 position = f"review {done_here}/{len(todo)} for {pid}"
             show(postings[pid], cv_id, cvs[cv_id], position)
             prompt = "1/0/s/u/q > " if not args.review else "1/0 replace, s keep, u undo, q quit > "
@@ -111,6 +106,9 @@ def main() -> int:
             cmd = cmd.lower()
 
             if cmd in {"1", "0"}:
+                if not note.strip():
+                    print("Add a short human rationale after each new or changed label.")
+                    continue
                 previous = rows.get((pid, cv_id))
                 rows[(pid, cv_id)] = {"posting_id": pid, "cv_id": cv_id,
                                     "label": cmd, "notes": note.strip()}
@@ -119,6 +117,11 @@ def main() -> int:
                 todo.pop(0)
             elif cmd == "s":
                 if args.review:
+                    if note.strip():
+                        previous = rows[(pid, cv_id)].copy()
+                        rows[(pid, cv_id)]["notes"] = note.strip()
+                        write_labels(rows)
+                        history.append((cv_id, previous))
                     todo.pop(0)
                 else:
                     todo.append(todo.pop(0))

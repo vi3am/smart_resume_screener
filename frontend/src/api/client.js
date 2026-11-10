@@ -4,7 +4,7 @@ import {
     AUTH_TOKEN_REFRESH_EVENT,
 } from "../context/auth-context";
 
-const baseURL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const baseURL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "/api" : "http://localhost:8000");
 const client = axios.create({ baseURL, withCredentials: true });
 let refreshInFlight = null;
 

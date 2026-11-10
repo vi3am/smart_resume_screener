@@ -31,14 +31,15 @@ def patch_parser(monkeypatch):
     monkeypatch.setattr(resume_routes, "parse_resume", lambda _: {"name": "Alex Example"})
 
 
-def test_batch_accepts_five_files(monkeypatch):
+def test_batch_accepts_twenty_files(monkeypatch):
     patch_parser(monkeypatch)
     job, headers = make_job()
     res = client.post(f"/jobs/{job['id']}/resumes/batch", headers=headers,
-                      files=[pdf(f"cv_{i}.pdf") for i in range(5)])
+                      files=[pdf(f"cv_{i}.pdf") for i in range(20)])
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["done"] == 5 and body["failed"] == 0
+    assert body["done"] == 20 and body["failed"] == 0
+    assert len(body["results"]) == 20
     assert all(
         result["status"] == "done"
         and result["resume_id"] is not None
@@ -47,13 +48,13 @@ def test_batch_accepts_five_files(monkeypatch):
     )
 
 
-def test_batch_rejects_six_files(monkeypatch):
+def test_batch_rejects_twenty_one_files(monkeypatch):
     patch_parser(monkeypatch)
     job, headers = make_job()
     res = client.post(f"/jobs/{job['id']}/resumes/batch", headers=headers,
-                      files=[pdf(f"cv_{i}.pdf") for i in range(6)])
+                      files=[pdf(f"cv_{i}.pdf") for i in range(21)])
     assert res.status_code == 400
-    assert "at most 5" in res.json()["detail"]
+    assert "at most 20" in res.json()["detail"]
 
 
 def test_batch_rejects_no_files(monkeypatch):

@@ -80,6 +80,16 @@ def test_job_routes_crud_and_access_control():
     assert missing.status_code == 404, missing.text
 
 
+def test_job_title_and_description_cannot_be_blank():
+    headers = auth_headers(f"jobs_blank_{uuid.uuid4().hex}@example.com")
+    for payload in (
+        {"title": "   ", "description": "A useful description"},
+        {"title": "A useful title", "description": "   "},
+    ):
+        response = client.post("/jobs/", json=payload, headers=headers)
+        assert response.status_code == 422
+
+
 def test_resume_routes_upload_reparse_and_ranking(monkeypatch):
     owner_email = f"resumes_owner_{uuid.uuid4().hex}@example.com"
     other_email = f"resumes_other_{uuid.uuid4().hex}@example.com"
@@ -140,14 +150,24 @@ def test_scoring_routes_create_and_fetch_latest(monkeypatch):
         files={"file": ("bob.pdf", b"%PDF-1.4\nBob Candidate", "application/pdf")},
     )
     assert upload.status_code == 200, upload.text
+    second_upload = client.post(
+        f"/jobs/{job['id']}/resumes/",
+        headers=owner_headers,
+        files={"file": ("alice.pdf", b"%PDF-1.4\nAlice Candidate", "application/pdf")},
+    )
+    assert second_upload.status_code == 200, second_upload.text
+
+    score_call = {"count": 0}
 
     def fake_score_cv(*_args, **_kwargs):
+        score_call["count"] += 1
+        overall = 0.9 if score_call["count"] % 2 == 1 else 0.6
         return SimpleNamespace(
-            skills=0.9,
-            experience=0.85,
-            education=0.8,
-            semantic=0.75,
-            overall=0.82,
+            skills=overall,
+            experience=overall,
+            education=overall,
+            semantic=overall,
+            overall=overall,
             matched_skills=["python", "sql"],
             missing_skills=[],
         )
@@ -159,9 +179,40 @@ def test_scoring_routes_create_and_fetch_latest(monkeypatch):
     payload = created.json()
     assert payload["job_id"] == job["id"]
     assert payload["method"] == "hybrid_v1"
-    assert len(payload["results"]) == 1
-    assert payload["results"][0]["filename"] == "bob.pdf"
+    assert len(payload["results"]) == 2
+    assert [result["rank"] for result in payload["results"]] == [1, 2]
+    assert [result["overall_score"] for result in payload["results"]] == [0.9, 0.6]
+    assert {
+        "skills_score",
+        "experience_score",
+        "education_score",
+        "semantic_score",
+        "matched_skills",
+        "missing_skills",
+    } <= payload["results"][0].keys()
 
     latest = client.get(f"/jobs/{job['id']}/scoring-runs/latest", headers=owner_headers)
     assert latest.status_code == 200, latest.text
     assert latest.json()["id"] == payload["id"]
+
+    updated_job = client.put(
+        f"/jobs/{job['id']}",
+        headers=owner_headers,
+        json={
+            "title": "Updated Backend Engineer",
+            "description": "Build resilient Python services and APIs.",
+            "required_skills": ["python", "sql", "docker"],
+            "min_years_experience": 5,
+            "min_education_level": "bachelor",
+        },
+    )
+    assert updated_job.status_code == 200, updated_job.text
+    stale = client.get(f"/jobs/{job['id']}/scoring-runs/latest", headers=owner_headers)
+    assert stale.status_code == 404
+    assert stale.json()["detail"] == "Job requirements changed. Run scoring again."
+
+    created_again = client.post(f"/jobs/{job['id']}/scoring-runs/", headers=owner_headers)
+    assert created_again.status_code == 201, created_again.text
+    current = client.get(f"/jobs/{job['id']}/scoring-runs/latest", headers=owner_headers)
+    assert current.status_code == 200, current.text
+    assert current.json()["id"] == created_again.json()["id"]

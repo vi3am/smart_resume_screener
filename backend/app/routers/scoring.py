@@ -34,9 +34,11 @@ def create_scoring_run(job_id: int, db: Session = Depends(get_db),
 @router.get("/latest", response_model=ScoringRunOut)
 def latest_scoring_run(job_id: int, db: Session = Depends(get_db),
             current_user: User = Depends(get_current_user)):
-    _owned_job(db, job_id, current_user)
+    job = _owned_job(db, job_id, current_user)
     run = (db.query(ScoringRun).filter(ScoringRun.job_id == job_id)
             .order_by(ScoringRun.id.desc()).first())
     if not run:
         raise HTTPException(404, "No scoring run yet for this job")
+    if job.updated_at and run.created_at < job.updated_at:
+        raise HTTPException(404, "Job requirements changed. Run scoring again.")
     return run_out(db, run)

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import client from "../api/client";
+import { getErrorMessage } from "../api/errorMessage";
 import { useAuth } from "../hooks/useAuth";
 
 export default function AuthPage({ mode }) {
@@ -20,16 +21,15 @@ export default function AuthPage({ mode }) {
     setLoading(true);
     try {
       const payload = isRegister
-        ? { email: form.email, password: form.password, full_name: form.full_name || null }
-        : { email: form.email, password: form.password };
+        ? { email: form.email.trim(), password: form.password, full_name: form.full_name.trim() || null }
+        : { email: form.email.trim(), password: form.password };
       const response = await client.post(isRegister ? "/auth/register" : "/auth/login", payload);
       login(response.data.access_token);
       navigate("/", { replace: true });
     } catch (requestError) {
-      const detail = requestError.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : isRegister
+      setError(getErrorMessage(requestError, isRegister
         ? "Could not create your account. Check your details and try again."
-        : "Email or password is incorrect.");
+        : "Email or password is incorrect."));
     } finally {
       setLoading(false);
     }

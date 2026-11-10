@@ -16,21 +16,28 @@ const educationLabel = {
 
 export default function JobResultsPage() {
   const { jobId } = useParams();
+  return <JobResultsContent key={jobId} jobId={jobId} />;
+}
+
+function JobResultsContent({ jobId }) {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
   const [uploadVersion, setUploadVersion] = useState(0);
+  const [completedResumeCount, setCompletedResumeCount] = useState(0);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setJob(null);
-    setError("");
-    setNotFound(false);
-    client.get(`/jobs/${jobId}`)
-      .then(({ data }) => {
-        if (active) setJob(data);
+    Promise.all([
+      client.get(`/jobs/${jobId}`),
+      client.get(`/jobs/${jobId}/resumes/`),
+    ])
+      .then(([{ data: jobData }, { data: resumes }]) => {
+        if (active) {
+          setJob(jobData);
+          setCompletedResumeCount(resumes.filter((resume) => resume.status === "done").length);
+        }
       })
       .catch((requestError) => {
         if (!active) return;
@@ -45,16 +52,16 @@ export default function JobResultsPage() {
   }, [jobId]);
 
   if (loading) {
-    return <AppShell><div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-600">Loading job...</div></AppShell>;
+    return <AppShell><div className="loading-card"><span className="spinner" />Loading job…</div></AppShell>;
   }
 
   if (!job) {
     return (
       <AppShell>
-        <section className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <h1 className="text-xl font-semibold text-slate-900">{notFound ? "Job not found" : "Could not load job"}</h1>
-          <p className="mt-2 text-sm text-slate-600">{error || "This job is unavailable."}</p>
-          <Link to="/" className="mt-5 inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Back to jobs</Link>
+        <section className="empty-state compact">
+          <h2>{notFound ? "Job not found" : "Could not load job"}</h2>
+          <p>{error || "This job is unavailable."}</p>
+          <Link to="/" className="button button-secondary">Back to jobs</Link>
         </section>
       </AppShell>
     );
@@ -62,23 +69,19 @@ export default function JobResultsPage() {
 
   return (
     <AppShell>
-      <Link to={`/jobs/${jobId}`} className="mb-5 inline-flex text-sm font-medium text-emerald-800 hover:underline">← Back to job</Link>
-      <header className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Job results</p>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900">{job.title}</h1>
-        <p className="mt-4 text-sm text-slate-700">
-          <span className="font-semibold">Required skills:</span>{" "}
-          {job.required_skills?.length ? job.required_skills.join(", ") : "None"}
-        </p>
-        <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-          <div><dt className="inline font-semibold text-slate-800">Minimum experience: </dt><dd className="inline text-slate-700">{job.min_years_experience} years</dd></div>
-          <div><dt className="inline font-semibold text-slate-800">Minimum education: </dt><dd className="inline text-slate-700">{educationLabel[job.min_education_level] || job.min_education_level}</dd></div>
-        </dl>
+      <Link to={`/jobs/${jobId}`} className="back-link">← Back to role</Link>
+      <header className="results-hero">
+        <div className="results-hero-title"><span className="role-icon large">{job.title.slice(0, 1).toUpperCase()}</span><div><p className="eyebrow">CANDIDATE INTELLIGENCE</p><h1>{job.title}</h1><p>Review the latest match scores for this role.</p></div></div>
+        <div className="results-hero-details"><div><span>MINIMUM EXPERIENCE</span><strong>{job.min_years_experience} years</strong></div><div><span>EDUCATION</span><strong>{educationLabel[job.min_education_level] || job.min_education_level}</strong></div><div><span>REQUIRED SKILLS</span><strong>{job.required_skills?.length || 0} skills</strong></div></div>
       </header>
 
-      <div className="space-y-6">
+      <div className="results-stack">
         <UploadPanel jobId={jobId} onUploadSuccess={() => setUploadVersion((version) => version + 1)} />
-        <ScoringPanel jobId={jobId} uploadVersion={uploadVersion} />
+        <ScoringPanel
+          jobId={jobId}
+          uploadVersion={uploadVersion}
+          completedResumeCount={completedResumeCount}
+        />
       </div>
     </AppShell>
   );

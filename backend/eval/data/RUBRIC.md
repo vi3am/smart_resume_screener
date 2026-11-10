@@ -26,5 +26,7 @@ Rules:
 - Minimum years and education are guidance, not hard cut-offs. Judge the overall fit.
 - Ignore name, gender, photo, layout and writing polish.
 - Label from the anonymized CV text and the posting only. Never look at any model score while labelling.
-- Borderline cases: decide by "would I interview this person?" and note the reason in the notes column.
+- Add a short reason for every label in the `notes` column, including the main evidence for positive and negative decisions. Borderline cases: decide by "would I interview this person?" and record why.
 - Single labeller (the student); a second labeller is out of scope and is listed as a limitation.
+- Labels form a binary relevance ranking: the evaluation metrics judge whether relevant CVs appear early, but do not claim a human ordering between two relevant candidates.
+- During review, hide the current label to reduce anchoring. Use `s reason` to retain the label and add a new reason.

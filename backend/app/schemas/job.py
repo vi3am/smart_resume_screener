@@ -4,11 +4,19 @@ from app.core.education import EducationLevel
 
 
 class JobCreate(BaseModel):
-    title: str
-    description: str
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(min_length=1)
     required_skills: list[str] = Field(default_factory=list)
     min_years_experience: int = Field(default=0, ge=0, le=50)
     min_education_level: EducationLevel = "high_school"
+
+    @field_validator("title", "description")
+    @classmethod
+    def clean_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("This field must not be blank")
+        return value
 
     @field_validator("required_skills")
     @classmethod

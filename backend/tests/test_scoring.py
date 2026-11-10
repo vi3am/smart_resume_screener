@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from app.services.scoring import (
-    education_score, experience_score, match_skills, score_cv,
+    DEFAULT_WEIGHTS, education_score, experience_score, match_skills, score_cv,
     semantic_score, skills_score, split_sections,
 )
 
@@ -30,6 +30,15 @@ def test_skill_match_with_plural_and_missing():
 def test_skill_aliases():
     matched, _ = match_skills(["PostgreSQL", "JavaScript"], "I use postgres and JS daily")
     assert matched == ["PostgreSQL", "JavaScript"]
+
+
+def test_skill_matching_is_case_insensitive_and_does_not_match_substrings():
+    matched, missing = match_skills(
+        ["Python", "Git", "Java"],
+        "PYTHON is required; I use GitHub and JavaScript.",
+    )
+    assert matched == ["Python"]
+    assert missing == ["Git", "Java"]
 
 
 def test_skill_match_needs_whole_words():
@@ -101,6 +110,24 @@ def test_overall_is_weighted_average():
     assert (r.skills, r.experience, r.education) == (50.0, 100.0, 100.0)
     assert r.overall == 75.0
     assert r.matched_skills == ["Kotlin"] and r.missing_skills == ["Git"]
+
+
+def test_default_scoring_formula_is_normalized_and_components_are_percentages():
+    assert DEFAULT_WEIGHTS == {
+        "skills": 0.4,
+        "experience": 0.2,
+        "education": 0.1,
+        "semantic": 0.3,
+    }
+    assert sum(DEFAULT_WEIGHTS.values()) == 1.0
+    result = score_cv(POSTING, "I know Kotlin", fields=FIELDS, embed=fake_embed)
+    assert all(0 <= score <= 100 for score in (
+        result.skills,
+        result.experience,
+        result.education,
+        result.semantic,
+        result.overall,
+    ))
 
 
 def test_bad_weights_are_rejected():

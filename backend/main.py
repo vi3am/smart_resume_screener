@@ -1,3 +1,9 @@
+'''
+export TEST_DATABASE_URL="$(grep '^DATABASE_URL=' .env | cut -d= -f2- | sed 's#/resume_screener$#/resume_screener_test#')"
+python -m eval.evidence
+'''
+
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text

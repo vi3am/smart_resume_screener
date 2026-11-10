@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { LuSparkles } from "react-icons/lu";
 import AppShell from "../components/AppShell";
 import client from "../api/client";
 
@@ -50,6 +51,7 @@ function JobForm({ onCancel, onCreated }) {
 
 export default function DashboardPage() {
   const [jobs, setJobs] = useState([]);
+  const [pipelineCounts, setPipelineCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -58,7 +60,23 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
     client.get("/jobs/")
-      .then(({ data }) => { if (active) setJobs(data); })
+      .then(async ({ data }) => {
+        if (!active) return;
+        setJobs(data);
+        const counts = await Promise.all(data.map(async (job) => {
+          try {
+            const { data: resumes } = await client.get(`/jobs/${job.id}/resumes/`);
+            return [job.id, {
+              total: resumes.length,
+              ready: resumes.filter((resume) => resume.status === "done").length,
+              failed: resumes.filter((resume) => resume.status === "failed").length,
+            }];
+          } catch {
+            return [job.id, null];
+          }
+        }));
+        if (active) setPipelineCounts(Object.fromEntries(counts));
+      })
       .catch((requestError) => {
         const detail = requestError.response?.data?.detail;
         if (active) setError(typeof detail === "string" ? detail : "Could not load your roles.");
@@ -69,6 +87,7 @@ export default function DashboardPage() {
 
   const addJob = (job) => {
     setJobs((current) => [job, ...current]);
+    setPipelineCounts((current) => ({ ...current, [job.id]: { total: 0, ready: 0, failed: 0 } }));
     setShowForm(false);
     navigate(`/jobs/${job.id}`);
   };
@@ -76,9 +95,14 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <section className="welcome-row">
-        <div><p className="eyebrow">YOUR WORKSPACE</p><h1>Good hiring starts with a clear view.</h1><p className="page-lede">Manage open roles and review the candidates who fit.</p></div>
+        <div><p className="eyebrow">RECRUITER WORKSPACE</p><h1>Your hiring, all in one place.</h1><p className="page-lede">Manage roles and keep candidate reviews moving.</p></div>
         <button className="button button-primary create-button" onClick={() => setShowForm((shown) => !shown)}><span className="plus">＋</span> Create a role</button>
       </section>
+      {!loading && jobs.length > 0 && <section className="workspace-overview" aria-label="Workspace overview">
+        <div><span className="overview-icon">▦</span><span><strong>{jobs.length}</strong><small>Open roles</small></span></div>
+        <div><span className="overview-icon">◉</span><span><strong>{Object.values(pipelineCounts).reduce((sum, counts) => sum + (counts?.total || 0), 0)}</strong><small>Resumes received</small></span></div>
+        <div><span className="overview-icon">✓</span><span><strong>{Object.values(pipelineCounts).reduce((sum, counts) => sum + (counts?.ready || 0), 0)}</strong><small>Ready to review</small></span></div>
+      </section>}
       {showForm && <JobForm onCancel={() => setShowForm(false)} onCreated={addJob} />}
       {error && <div className="alert alert-error" role="alert">{error}<button className="alert-retry" onClick={() => window.location.reload()}>Reload</button></div>}
       <section className="roles-section">
@@ -86,10 +110,19 @@ export default function DashboardPage() {
         {loading ? <div className="loading-card"><span className="spinner" />Loading your workspace…</div> : jobs.length === 0 ? (
           <div className="empty-state"><div className="empty-illustration"><span>▤</span><i>✦</i></div><h3>Your first shortlist starts with a role</h3><p>Create a job posting to upload resumes and compare candidates against what matters.</p><button className="button button-primary" onClick={() => setShowForm(true)}>Create your first role <span aria-hidden="true">→</span></button></div>
         ) : (
-          <div className="role-grid">{jobs.map((job) => <Link className="role-card" to={`/jobs/${job.id}`} key={job.id}><div className="role-card-top"><span className="role-icon">{job.title.slice(0, 1).toUpperCase()}</span><span className="role-arrow" aria-hidden="true">↗</span></div><h3>{job.title}</h3><p className="role-description">{job.description}</p><div className="role-meta"><span><span className="meta-dot" />Active role</span><span>{job.required_skills?.length || 0} skills</span></div></Link>)}</div>
+          <div className="role-grid">{jobs.map((job) => {
+            const counts = pipelineCounts[job.id];
+            return <Link className="role-card" to={`/jobs/${job.id}`} key={job.id}>
+              <div className="role-card-top"><span className="role-icon">{job.title.slice(0, 1).toUpperCase()}</span><span className="role-arrow" aria-hidden="true">↗</span></div>
+              <div className="role-card-heading"><h3>{job.title}</h3><span className="role-status"><span className="meta-dot" />Open</span></div>
+              <p className="role-description">{job.description}</p>
+              <div className="role-meta"><span>{job.required_skills?.length || 0} required skills</span><span>{job.min_years_experience}+ yrs experience</span></div>
+              <div className="role-pipeline"><span><strong>{counts ? counts.total : "—"}</strong> candidates</span><span><strong>{counts ? counts.ready : "—"}</strong> ready to review</span>{counts?.failed > 0 && <span className="pipeline-attention">{counts.failed} need attention</span>}</div>
+            </Link>;
+          })}</div>
         )}
       </section>
-      <section className="tip-banner"><div className="tip-mark">✳</div><div><strong>Make every requirement count.</strong><p>Add the skills and experience that matter to help organize your candidate review.</p></div></section>
+      <section className="tip-banner"><div className="tip-mark"><LuSparkles aria-hidden="true" /></div><div><strong>Keep review criteria clear.</strong><p>Candidate matching is a review aid. Use it alongside your requirements and professional judgment.</p></div></section>
     </AppShell>
   );
 }

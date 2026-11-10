@@ -3,6 +3,7 @@ import shutil
 import json
 import logging
 import uuid
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, Depends, HTTPException
@@ -10,28 +11,32 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import Resume, JobPosting, User
+from app.models.models import JobPosting, MatchScore, Resume, User
 from app.schemas.resume import ResumeOut
 from app.services.parser import extract_text, parse_resume
 from app.core.deps import get_current_user
-from app.models.models import MatchScore
 from app.schemas.match import RankedCandidate
 from app.services.matcher import score_resume
 from app.services.scan_check import SCANNED_MESSAGE, ScannedPdfError
+from app.services.resume_retention import delete_resume_data
 
 logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE = 5 * 1024 * 1024
 router = APIRouter(prefix="/jobs/{job_id}/resumes", tags=["resumes"])
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_MIME_TYPES = {
+    ".pdf": {"application/pdf"},
+    ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+}
 DOCUMENT_FAILURE_DETAIL = (
     "Resume processing failed. Upload a valid, readable PDF or DOCX file."
 )
 STORAGE_FAILURE_DETAIL = "Resume could not be stored. Try again."
+MIME_FAILURE_DETAIL = "File extension and MIME type must match a supported PDF or DOCX file."
 
 
 def _mark_resume_failed(db: Session, resume_id: int, reason: str) -> None:
@@ -65,6 +70,35 @@ def _candidate_name(parsed_data: str | None) -> str | None:
     return None
 
 
+def _validate_document(file: UploadFile, extension: str) -> None:
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if content_type not in ALLOWED_MIME_TYPES[extension]:
+        raise HTTPException(400, MIME_FAILURE_DETAIL)
+
+    file.file.seek(0)
+    prefix = file.file.read(1024)
+    file.file.seek(0)
+    if extension == ".pdf":
+        valid_content = b"%PDF-" in prefix
+    else:
+        try:
+            with zipfile.ZipFile(file.file) as document:
+                names = set(document.namelist())
+                entries = document.infolist()
+                valid_content = (
+                    "[Content_Types].xml" in names
+                    and "word/document.xml" in names
+                    and len(entries) <= 1000
+                    and sum(info.file_size for info in entries) <= 25 * 1024 * 1024
+                )
+        except (OSError, zipfile.BadZipFile):
+            valid_content = False
+        finally:
+            file.file.seek(0)
+    if not valid_content:
+        raise HTTPException(400, MIME_FAILURE_DETAIL)
+
+
 @router.post("/", response_model=ResumeOut)
 def upload_resume(
     job_id: int,
@@ -74,7 +108,10 @@ def upload_resume(
 ):
     _owned_job(db, job_id, current_user.id)
 
-    original_filename = file.filename or ""
+    original_filename = (file.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+    original_filename = original_filename.strip()
+    if not original_filename or len(original_filename) > 255:
+        raise HTTPException(400, "Invalid filename")
     ext = os.path.splitext(original_filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Unsupported file type: {ext}")
@@ -85,6 +122,8 @@ def upload_resume(
     if size > MAX_FILE_SIZE:
         raise HTTPException(400, "File too large (max 5MB)")
 
+    _validate_document(file, ext)
+
     existing = db.query(Resume).filter(
         Resume.job_id == job_id, Resume.filename == original_filename
     ).first()
@@ -94,7 +133,7 @@ def upload_resume(
         )
 
     safe_filename = f"{job_id}_{uuid.uuid4().hex}{ext}"
-    save_path = os.path.join(UPLOAD_DIR, safe_filename)
+    save_path = UPLOAD_DIR / safe_filename
 
     if existing is not None:
         resume = existing
@@ -113,11 +152,15 @@ def upload_resume(
     db.refresh(resume)
 
     try:
-        with open(save_path, "wb") as stored_file:
+        UPLOAD_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(UPLOAD_DIR, 0o700)
+        descriptor = os.open(save_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as stored_file:
             shutil.copyfileobj(file.file, stored_file)
 
-        raw_text = extract_text(save_path)
+        raw_text = extract_text(str(save_path))
         parsed = parse_resume(raw_text)
+        save_path.unlink()
 
         resume.raw_text = raw_text
         resume.parsed_data = json.dumps(parsed)
@@ -126,8 +169,6 @@ def upload_resume(
         db.commit()
         db.refresh(resume)
         return resume
-    except HTTPException:
-        raise
     except (OSError, SQLAlchemyError) as exc:
         logger.exception("Resume storage failed for resume_id=%s", resume.id)
         db.rollback()
@@ -151,6 +192,26 @@ def upload_resume(
             logger.exception("Could not remove failed resume file for resume_id=%s", resume.id)
         _mark_resume_failed(db, resume.id, failure_detail)
         raise HTTPException(status_code=422, detail=failure_detail) from exc
+
+
+@router.delete("/{resume_id}")
+def delete_resume(
+    job_id: int,
+    resume_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _owned_job(db, job_id, current_user.id)
+    resume = db.query(Resume).filter(
+        Resume.id == resume_id,
+        Resume.job_id == job_id,
+    ).first()
+    if resume is None:
+        raise HTTPException(404, "Resume not found")
+
+    delete_resume_data(db, resume)
+    db.commit()
+    return {"deleted": True}
 
 
 @router.get("/", response_model=list[ResumeOut])

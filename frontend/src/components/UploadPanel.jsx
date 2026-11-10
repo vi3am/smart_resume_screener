@@ -53,7 +53,7 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
   return (
     <section className="panel upload-panel">
       <p className="eyebrow">BUILD YOUR SHORTLIST</p><h2>Upload resumes</h2>
-      <p className="panel-lede">Choose up to {MAX_RESUME_UPLOAD_FILES} PDF or DOCX files, 5 MB each.</p>
+      <p className="panel-lede">Choose up to {MAX_RESUME_UPLOAD_FILES} PDF or DOCX files per batch, 5 MiB each.</p>
 
       <label htmlFor="resume-files" className="field-label">
         Resume files
@@ -101,9 +101,9 @@ export default function UploadPanel({ jobId, onUploadSuccess }) {
             <li key={outcome.key} className={outcome.status === "failed" ? "failed" : ""}>
               <span>{outcome.filename}</span>
               <strong className={outcome.status === "done" ? "ready" : "failed-status"}>
-                {outcome.status}
+                {outcome.status === "done" ? "Processed successfully" : "Upload failed"}
               </strong>
-              <small>Failure reason: {outcome.failure_reason || "None"}</small>
+              {outcome.failure_reason && <small>{outcome.failure_reason}</small>}
             </li>
           ))}
         </ul>

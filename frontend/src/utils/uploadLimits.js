@@ -1,0 +1,1 @@
+export const MAX_RESUME_UPLOAD_FILES = 20;

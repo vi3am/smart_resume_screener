@@ -1,3 +1,4 @@
+import base64
 from datetime import timedelta
 import uuid
 
@@ -79,7 +80,13 @@ def test_expired_and_tampered_access_tokens_are_rejected():
     assert expired_response.status_code == 401
 
     valid = client.post("/auth/login", json={"email": email, "password": "Auth-Test-Password-123!"}).json()["access_token"]
-    tampered = f"{valid[:-1]}{'A' if valid[-1] != 'A' else 'B'}"
+    header, payload, signature = valid.split(".")
+    signature_bytes = bytearray(
+        base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))
+    )
+    signature_bytes[0] ^= 1
+    tampered_signature = base64.urlsafe_b64encode(signature_bytes).decode().rstrip("=")
+    tampered = f"{header}.{payload}.{tampered_signature}"
     tampered_response = client.get("/jobs/", headers={"Authorization": f"Bearer {tampered}"})
     assert tampered_response.status_code == 401
 

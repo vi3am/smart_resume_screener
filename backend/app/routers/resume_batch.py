@@ -1,4 +1,4 @@
-"""Upload up to 5 résumés in one request. Each file goes through the single-file upload route."""
+"""Upload up to 20 résumés in one request. Each file uses the single-file upload route."""
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.models import JobPosting, User
 from app.routers.resumes import upload_resume
 
-MAX_FILES = 50
+MAX_FILES = 20
 
 router = APIRouter(prefix="/jobs/{job_id}/resumes", tags=["resumes"])
 
